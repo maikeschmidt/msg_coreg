@@ -16,9 +16,9 @@ torso.vertices = torso_temp.vertices;
 torso.faces = torso_temp.faces;
 
 % Fiducials of the torso
-% - Left shoulder (point 558)
-% - Right shoulder (point 1557)
-% - Chin (point 182)
+% - Left shoulder (point 3093)
+% - Right shoulder (point 8774)
+% - Chin (point 887)
 torso_fids = [torso.vertices(3093,:);
               torso.vertices(8774,:);
               torso.vertices(887,:)];

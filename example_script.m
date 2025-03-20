@@ -1,4 +1,5 @@
 %% Example script to co-register between OPM sensor positions, Optical Scan, and Simulation mesh models
+% the only thing to make sure that is in path is spm - otherwise i *think* this should have it all
 
 % This is early days, so there may be some snags in the pipeline - let me know!!!
 

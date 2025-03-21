@@ -4,7 +4,7 @@ function M = cr_register_torso(S)
 
 if ~isfield(S,'fiducials'), error('You must provide fiducial locations'); end
 if ~isfield(S,'subject'), error('You must provide a mesh to fit to!'); end
-if ~isfield(S,'dist'), S.dist = 0.06; end
+if ~isfield(S,'dist'), S.dist = 0.02; end
 if ~isfield(S,'plot'), S.plot = false; end
 
 % Load the canonical torso and generate fiducials
@@ -16,12 +16,14 @@ torso.vertices = torso_temp.vertices;
 torso.faces = torso_temp.faces;
 
 % Fiducials of the torso
-% - Left shoulder (point 3093)
-% - Right shoulder (point 8774)
-% - Chin (point 887)
-torso_fids = [torso.vertices(3093,:);
-              torso.vertices(8774,:);
-              torso.vertices(887,:)];
+% - Left shoulder (point 3107)
+% - Right shoulder (point 8838)
+% - Chin (point 860)
+% - Lower Spine (point 5568)
+torso_fids = [torso.vertices(3107,:);
+              torso.vertices(8838,:);
+              % torso.vertices(860,:)
+              torso.vertices(5568,:)];
 
 % Step 1: Normalize units between subject and canonical torso
 %--------------------------------------------------------
@@ -30,18 +32,20 @@ M0 = diag([sf, sf, sf, 1]); % Scaling matrix
 
 torso.vertices = (M0 * [torso.vertices, ones(size(torso.vertices,1),1)]')'; 
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
-torso_fids = [torso.vertices(3093,:);
-              torso.vertices(8774,:);
-              torso.vertices(887,:)]; % Update fiducials after scaling
+torso_fids = [torso.vertices(3107,:);
+              torso.vertices(8838,:);
+              % torso.vertices(860,:)
+              torso.vertices(5568,:)]; % Update fiducials after scaling
 
 % Step 2: Rigid body transform based on fiducial alignment
 %--------------------------------------------------------
 M1 = spm_eeg_inv_rigidreg(S.fiducials', torso_fids');
 torso.vertices = (M1 * [torso.vertices, ones(size(torso.vertices,1),1)]')';
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
-torso_fids = [torso.vertices(3093,:);
-              torso.vertices(8774,:);
-              torso.vertices(887,:)]; % Update fiducials
+torso_fids = [torso.vertices(3107,:);
+              torso.vertices(8838,:);
+              % torso.vertices(860,:)
+              torso.vertices(5568,:)]; % Update fiducials
 
 % Step 3: ICP Refinement
 %--------------------------------------------------------

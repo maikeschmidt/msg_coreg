@@ -8,43 +8,70 @@ if ~isfield(S, 'vertebrae'); S.vertebrae = []; end
 
 % Plot the subject mesh (torso/body)
 figure
-ft_plot_mesh(S.subject, 'facecolor', 'none', 'edgecolor', 'k', ...
+ft_plot_mesh(S.subject, 'facecolor', 'none', 'edgecolor', 'y', ...
     'clipping', 'off', 'edgealpha', 0.2);
 hold on
 
-% Load heart and lungs with transformation, torso without transformation
-meshes = cr_load_meshes(S.T);
-unit = cr_determine_mesh_units(meshes);
+% Determine whether to load the canonical spine
+loadCanonicalSpine = isempty(S.spine) && isempty(S.vertebrae);
+meshes = cr_load_meshes(S.T, loadCanonicalSpine);
+unit = tt_determine_mesh_units(meshes);
 
-% Ensure the meshes are correctly assigned
-if numel(meshes) < 3
-    error('Expected 3 meshes (heart, lungs, torso), but found only %d.', numel(meshes));
-end
+% Define colors and alpha values
+colors = {'r', 'g', 'b'}; % Heart, lungs, torso
+alphas = [0.3, 0.3, 0.1];
 
-% Define colors for visualization
-colors = {'r', 'g', 'b', 'y'};
-alphas = [0.3, 0.3, 0.3, 0.8];
-
-for ii = 1:numel(meshes)
+% Assign heart, lungs, and torso
+for ii = 1:3
     tmp.pnt = meshes{ii}.vertices;
     tmp.tri = meshes{ii}.faces;
     tmp.unit = unit;
 
-    % Plot mesh with color and alpha
+    % Plot mesh
     ft_plot_mesh(tmp, 'facecolor', colors{ii}, 'edgecolor', 'none', 'facealpha', alphas(ii));
 
-    % Save the mesh data
+    % Save mesh data
     switch ii
         case 1
-            output_meshes.mesh_heart.vertices = tmp.pnt;
-            output_meshes.mesh_heart.faces = tmp.tri;
+            output_meshes.mesh_heart = tmp;
         case 2
-            output_meshes.mesh_lungs.vertices = tmp.pnt;
-            output_meshes.mesh_lungs.faces = tmp.tri;
+            output_meshes.mesh_lungs = tmp;
         case 3
-            output_meshes.mesh_torso.vertices = tmp.pnt;
-            output_meshes.mesh_torso.faces = tmp.tri;
+            output_meshes.mesh_torso = tmp;
     end
 end
+
+% Handle spine and vertebrae cases
+if ~isempty(S.spine)
+    % Use user-provided spine (no transformation)
+    spine_tmp.pnt = S.spine.vertices;
+    spine_tmp.tri = S.spine.faces;
+    spine_tmp.unit = unit;
+    ft_plot_mesh(spine_tmp, 'facecolor', 'blue', 'edgecolor', 'none', 'facealpha', 0.5);
+    output_meshes.mesh_spine = spine_tmp;
+elseif loadCanonicalSpine && numel(meshes) > 3
+    % Use canonical spine (transformed)
+    spine_tmp.pnt = meshes{4}.vertices;
+    spine_tmp.tri = meshes{4}.faces;
+    spine_tmp.unit = unit;
+    ft_plot_mesh(spine_tmp, 'facecolor', 'blue', 'edgecolor', 'none', 'facealpha', 0.5);
+    output_meshes.mesh_spine = spine_tmp;
 end
 
+if ~isempty(S.vertebrae)
+    % Use user-provided vertebrae (no transformation)
+    bone_tmp.pnt = S.vertebrae.vertices;
+    bone_tmp.tri = S.vertebrae.faces;
+    bone_tmp.unit = unit;
+    ft_plot_mesh(bone_tmp, 'facecolor', 'black', 'edgecolor', 'none', 'facealpha', 0.2);
+    output_meshes.mesh_vertebrae = bone_tmp;
+end
+
+xlabel('X-axis'); ylabel('Y-axis'); zlabel('Z-axis');
+grid on
+
+% Plot sensors if available
+if ~isempty(S.sensors)
+    ft_plot_sens(ft_convert_units(S.sensors, unit))
+end
+end

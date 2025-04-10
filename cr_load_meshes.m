@@ -21,8 +21,11 @@ function [meshes] = cr_load_meshes(T, loadSpine)
 end
 
 
-
 function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTransform)
+
+    % Set precision for welding (adjust if needed)
+    tolerance = 1e-6;
+
     meshes = {};
     for i = 1:numel(fileNames)
         stlFile = fullfile(coreg_path, [fileNames{i}, '.stl']);
@@ -30,8 +33,15 @@ function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTra
 
         if exist(stlFile, 'file')
             tempMesh = stlread(stlFile);
-            mesh.vertices = tempMesh.vertices;
-            mesh.faces = double(tempMesh.faces);
+
+            % Weld vertices to remove duplicates
+            V = tempMesh.vertices;
+            F = double(tempMesh.faces);
+            [V_unique, ~, ic] = unique(round(V * (1 / tolerance)) * tolerance, 'rows', 'stable');
+            F_fixed = ic(F);
+
+            mesh.vertices = V_unique;
+            mesh.faces = F_fixed;
         else
             warning('File %s not found. Skipping.', stlFile);
             continue;

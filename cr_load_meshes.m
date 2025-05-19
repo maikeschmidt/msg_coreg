@@ -1,29 +1,34 @@
-function [meshes] = cr_load_meshes(T, loadSpine)
-    % Load meshes with transformations applied
-    % T: Transformation matrix
-    % loadSpine: Boolean flag to determine whether to load the canonical spine
+function meshes = cr_load_meshes(T, loadSpine, spineType, boneType)
 
-    if nargin < 1 || isempty(T)
-        T = eye(4); 
-    end
-    if nargin < 2
-        loadSpine = true; % Default: Load spine unless overridden
-    end
-
-    names = {'heart', 'lungs', 'torso'}; % Always load these
-    if loadSpine
-        names{end + 1} = 'spine'; % Add spine only if needed
-    end
-
-    % Load and transform all except spine (if user-specified)
-    applyTransform = true; % Always apply transform to heart, lungs, torso
-    meshes = load_and_transform_meshes(names, T, applyTransform);
+if nargin < 1 || isempty(T)
+    T = eye(4);
 end
+if nargin < 2
+    loadSpine = true;
+end
+if nargin < 3
+    spineType = 'spine';
+end
+if nargin < 4
+    boneType = 'bone';
+end
+
+names = {'heart', 'lungs', 'torso'};
+
+if loadSpine
+    names{end + 1} = spineType;
+    names{end + 1} = boneType;
+end
+
+applyTransform = true;
+meshes = load_and_transform_meshes(names, T, applyTransform);
+
+end
+
 
 
 function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTransform)
 
-    % Set precision for welding (adjust if needed)
     tolerance = 1e-6;
 
     meshes = {};
@@ -34,7 +39,6 @@ function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTra
         if exist(stlFile, 'file')
             tempMesh = stlread(stlFile);
 
-            % Weld vertices to remove duplicates
             V = tempMesh.vertices;
             F = double(tempMesh.faces);
             [V_unique, ~, ic] = unique(round(V * (1 / tolerance)) * tolerance, 'rows', 'stable');
@@ -47,12 +51,10 @@ function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTra
             continue;
         end
 
-        % Apply transformation only if specified
         if applyTransform
             mesh = spm_mesh_transform(mesh, transformMatrix);
         end
 
-        % Append mesh
         meshes{end + 1} = mesh;
     end
 end

@@ -68,5 +68,12 @@ T = cr_register_torso(S);
 S = []; 
 S.subject = opm_optical;
 S.T = T;
-S.sensors = ; %can define the sensors to plot here (i havnt tried this yet with real data only simulated arrays but in theory should work)
+S.spine_mode = 'default';  % can be 'default', 'cervical', 'custom
+% for 'custom' mode:
+% S.spine = user_spine_mesh;
+% S.vertebrae = user_bone_mesh;
+
+S.sensors = ; %can define the sensors to plot here
+
 all_meshes = cr_check_registration(S);
+all_meshes.unit = 'mm';

@@ -14,10 +14,9 @@ geoms_path = ('D:\Simulations\BEM\geometries' );
 geoms = load(fullfile(geoms_path, 'geometries_19seg_bem.mat'));
 ordering = {'wm','bone', 'heart', 'lungs', 'torso'}; 
 
-clear mesh
 mesh_idx = 1;
 
-tt_add_bem; 
+tt_add_bem; %for now ignore warnings about open meshes- i will fix the meshes and push an update (it shouldnt affect the BEM)
 
 for ii = 1:numel(ordering)
 

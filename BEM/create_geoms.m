@@ -1,6 +1,4 @@
 %% script to generate the meshes and other input for BEM and FEM forward modelling
-% just need to comment/ uncomment certain bits to switch between BEM and
-% FEM outputs
 
 clearvars
 close all
@@ -9,7 +7,7 @@ Metadata;
 cd('D:\Simulations');
 
 %% Import mesh 
-mesh2 = ft_read_headshape('D:\MRI\19_02_25\cropped_nifti\combined_image_1point5iso.stl', 'unit', 'mm');
+mesh2 = ft_read_headshape('D:\MRI\19_02_25\cropped_nifti\combined_image_1point5iso.stl', 'unit', 'mm'); %mri or optical scan to match geometries to
 subject = mesh2;
 
 p = [];
@@ -125,47 +123,6 @@ grid on;
 lighting gouraud;
 camlight;  
 
-
-%% generate sensor array
-S = [];
-S.subject = mesh;  
-S.T = T;            
-S.resolution = .055;  % Set resolution for the sensor grid
-S.depth = .030;       % Depth from the surface to place sensors
-S.fids = sub_fids;       
-S.frontflag = 1; 
-S.unit = 'mm';
-
-% Generate the sensor array
-sensors_back = fem_generate_sensor_array(S);
-
-S.frontflag = 0;
-sensors_front = fem_generate_sensor_array(S);
-
-% create 'proper' sensor structure
-back_sensors = struct();
-back_sensors.balance = sensors_back.balance; % Assuming balance is the same across sensors
-back_sensors.chanori = [sensors_back.chanori]; 
-back_sensors.chanpos = [sensors_back.chanpos];
-back_sensors.chantype = [sensors_back.chantype];
-back_sensors.chanunit = [sensors_back.chanunit]; 
-back_sensors.coilori = [sensors_back.coilori]; 
-back_sensors.coilpos = [sensors_back.coilpos]; 
-back_sensors.label = [sensors_back.label]; 
-back_sensors.tra = speye(size(back_sensors.chanori, 1)); 
-back_sensors.unit = 'mm'; 
-
-front_sensors = struct();
-front_sensors.balance = sensors_front.balance;
-front_sensors.chanori = [sensors_front.chanori]; 
-front_sensors.chanpos = [sensors_front.chanpos];
-front_sensors.chantype = [sensors_front.chantype];
-front_sensors.chanunit = [sensors_front.chanunit]; 
-front_sensors.coilori = [sensors_front.coilori]; 
-front_sensors.coilpos = [sensors_front.coilpos]; 
-front_sensors.label = [sensors_front.label]; 
-front_sensors.tra = speye(size(front_sensors.chanori, 1)); 
-front_sensors.unit = 'mm'; 
 
 %% Try and plot the model
 

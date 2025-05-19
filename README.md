@@ -10,4 +10,4 @@ if you are NOT using one of the provided spinal cord or vetebra models - i recom
 this way you can apply the same transformation applied to the subject, to the cord and bone too. Otherwise you will need to create a custom way of registering in the spinal cord
 
 if you only have a custom spinal cord mesh (already in the same space as the subject mesh) but no bone model, i have provided an example of how to create a bone model too. just remeber to 
-apply any transformation you apply to the cord to the bone as well
+apply any transformation you apply to the cord to the bone as well - this is under the BEM folder (generate geometries)

@@ -76,4 +76,3 @@ S.spine_mode = 'default';  % can be 'default', 'cervical', 'custom
 S.sensors = ; %can define the sensors to plot here
 
 all_meshes = cr_check_registration(S);
-all_meshes.unit = 'mm';

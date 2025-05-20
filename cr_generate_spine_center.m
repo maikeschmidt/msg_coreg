@@ -14,6 +14,7 @@ function src = cr_generate_spine_center(S)
 
     center_line = [];
     y_dist = [];
+    z_collected = [];  % To store Z-values for output
 
     y_values = y_max:-S.resolution:y_min;
 
@@ -47,18 +48,25 @@ function src = cr_generate_spine_center(S)
                 k = convhull(projected_points(:,1), projected_points(:,2));
                 boundary_points = projected_points(k, :);
                 radii = sqrt(sum(boundary_points.^2, 2));
-                min_diam = 2 * mean(radii); % Averaging distances
+                min_diam = 2 * mean(radii);
             else
                 min_diam = 0.001;
             end
 
             center_line = [center_line; x_mid, y, z_mid];
             y_dist = [y_dist; min_diam];
+            z_collected = [z_collected; z_mid];
         end
     end
 
     src.pos = center_line;
-    src.ydist = y_dist;
+    src.zdist = y_dist;
     src.inside = ones(size(src.pos, 1), 1);
     src.unit = unit;
+
+    if ~isempty(z_collected)
+        src.zlim = [min(z_collected), max(z_collected)];
+    else
+        src.zlim = [0, 0]; % Default/fallback
+    end
 end

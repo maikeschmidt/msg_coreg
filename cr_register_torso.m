@@ -20,11 +20,11 @@ torso.faces = torso_temp.faces;
 % - Right shoulder (point 8838)
 % - Chin (point 860)
 % - Lower Spine (point 5568)
-torso_fids = [torso.vertices(3107,:);
-              torso.vertices(8838,:);
-              % torso.vertices(860,:)
-              torso.vertices(5568,:)];
 
+torso_fids = [torso.vertices(3116,:);
+              torso.vertices(8819,:);
+              torso.vertices(861,:)];
+              % torso.vertices(5568,:)];
 % Step 1: Normalize units between subject and canonical torso
 %--------------------------------------------------------
 sf = determine_body_scan_units(S.fiducials, torso_fids);
@@ -32,20 +32,22 @@ M0 = diag([sf, sf, sf, 1]); % Scaling matrix
 
 torso.vertices = (M0 * [torso.vertices, ones(size(torso.vertices,1),1)]')'; 
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
-torso_fids = [torso.vertices(3107,:);
-              torso.vertices(8838,:);
-              % torso.vertices(860,:)
-              torso.vertices(5568,:)]; % Update fiducials after scaling
+
+torso_fids = [torso.vertices(3116,:);
+              torso.vertices(8819,:);
+              torso.vertices(861,:)];
+              % torso.vertices(5568,:)]; % Update fiducials after scaling
 
 % Step 2: Rigid body transform based on fiducial alignment
 %--------------------------------------------------------
 M1 = spm_eeg_inv_rigidreg(S.fiducials', torso_fids');
 torso.vertices = (M1 * [torso.vertices, ones(size(torso.vertices,1),1)]')';
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
-torso_fids = [torso.vertices(3107,:);
-              torso.vertices(8838,:);
-              % torso.vertices(860,:)
-              torso.vertices(5568,:)]; % Update fiducials
+
+torso_fids = [torso.vertices(3116,:);
+              torso.vertices(8818,:);
+              torso.vertices(861,:)];
+              % torso.vertices(5568,:)];% Update fiducials
 
 % Step 3: ICP Refinement
 %--------------------------------------------------------

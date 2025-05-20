@@ -204,7 +204,6 @@ front_coils_3axis.orientations = front_sensors.coilori;
 sources_cent = sources_center_line;
 
 % Save to .mat
-cd('D:\Co-Registration\');
 save('geometries_trial.mat', 'mesh_wm', 'mesh_bone', 'mesh_heart',...
     'mesh_lungs', 'mesh_torso', 'back_coils_3axis', 'front_coils_3axis','sources_cent', 'transform_matrix');
 

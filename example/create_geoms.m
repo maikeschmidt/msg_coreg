@@ -9,7 +9,7 @@ Metadata;
 cd('D:\Simulations');
 
 %% Import mesh 
-mesh2 = ft_read_headshape('D:\MRI\19_02_25\cropped_nifti\combined_image_1point5iso.stl', 'unit', 'mm');
+mesh2 = ; %import the subject mesh from which you want to create your mesh models from
 subject = mesh2;
 
 p = [];
@@ -60,14 +60,14 @@ cord_mesh.faces = s2.faces;
 cord_mesh.vertices = s2.vertices;
 cord_mesh.unit = spine_data.unit;
 
-y_min = min(cord_mesh.vertices(:,3));
-z_max = max(cord_mesh.vertices(:,3));
+y_min = min(cord_mesh.vertices(:,2));
+y_max = max(cord_mesh.vertices(:,2));
 
 S = [];
 S.spine = cord_mesh;
 S.T = T;
 S.resolution = 20; 
-S.ylim = [y_min z_max];
+S.ylim = [y_min y_max];
 S.unit = cord_mesh.unit;
 src_grid = fem_generate_spine_center(S);
 
@@ -154,48 +154,6 @@ mesh_lungs = all_meshes.mesh_lungs;
 mesh_torso = all_meshes.mesh_torso;
 mesh_spine = all_meshes.mesh_spine;
 mesh_bone = all_meshes.mesh_vertebrae;
-
-%% generate sensor array
-S = [];
-S.torso = mesh_torso;       
-S.T = T;                  
-S.resolution = 8;       % Grid spacing
-S.depth = 3;              % Sensor distance into space
-S.fids = sub_fids;        
-S.frontflag = 1;          
-S.unit = 'mm';            
-
-
-% Generate the sensor array
-sensors_back = cr_generate_sensor_array(S);
-
-S.frontflag = 0;
-sensors_front = cr_generate_sensor_array(S);
-
-% create 'proper' sensor structure
-back_sensors = struct();
-back_sensors.balance = sensors_back.balance; % Assuming balance is the same across sensors
-back_sensors.chanori = [sensors_back.chanori]; 
-back_sensors.chanpos = [sensors_back.chanpos];
-back_sensors.chantype = [sensors_back.chantype];
-back_sensors.chanunit = [sensors_back.chanunit]; 
-back_sensors.coilori = [sensors_back.coilori]; 
-back_sensors.coilpos = [sensors_back.coilpos]; 
-back_sensors.label = [sensors_back.label]; 
-back_sensors.tra = speye(size(back_sensors.chanori, 1)); 
-back_sensors.unit = 'mm'; 
-
-front_sensors = struct();
-front_sensors.balance = sensors_front.balance;
-front_sensors.chanori = [sensors_front.chanori]; 
-front_sensors.chanpos = [sensors_front.chanpos];
-front_sensors.chantype = [sensors_front.chantype];
-front_sensors.chanunit = [sensors_front.chanunit]; 
-front_sensors.coilori = [sensors_front.coilori]; 
-front_sensors.coilpos = [sensors_front.coilpos]; 
-front_sensors.label = [sensors_front.label]; 
-front_sensors.tra = speye(size(front_sensors.chanori, 1)); 
-front_sensors.unit = 'mm'; 
 
 %% source points
 y_min = min(mesh_spine.vertices(:,2));

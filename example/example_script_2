@@ -7,9 +7,19 @@
 %%
 
 % First, need to create the spm opm structure to extract the sensor positions
-cd('coreg_path\example';
+% cd('coreg_path\example')
+clearvars
+close all
+clc
 
-%import sensors - i have used spm to create my sensor array structure
+cd('D:\');
+Metadata;
+
+sub = 'OP00210';
+posfile_back = 'D:\OPM\sub-OP00210\scannercast_positions\positions_all_OP00210.tsv';
+savepath = fullfile('D:\OPM\', ['sub-OP', sub(3:end)], 'nervesim');
+cd(savepath)
+
 D = {}; 
 filetemplate = sprintf('nervesim-right-run_002_array1.lvm');
 S = struct(); 
@@ -19,7 +29,7 @@ D = spm_opm_create(S);
 
 %% Load and process the optical scan
 cd('D:\OPM\scannercast')
-optical = ft_read_headshape('surface.stl', 'unit', 'mm'); %this is the subject mesh in opm sensor space!
+optical = ft_read_headshape('surface.stl', 'unit', 'mm');
 p = struct();
 p.vertices = optical.pos;
 p.faces = optical.tri;
@@ -38,37 +48,83 @@ mesh.unit = 'mm'; % Define unit explicitly - make sure it matches the grad struc
 % is in opm sensor space - but we know what the transform matrix is so can
 % just go ahead and apply this
 % 
-
 S = []; 
 S.subject = mesh;
 S.sensors = sensors(D, 'MEG'); 
-S.spine_mode = 'full'; %full or cervical
+S.brain = true;
+S.spine_mode = 'cervical'; %full or cervical
 S.torso_mode = 'anatomical'; %anatomical or canonical (if choosing canonical - you will need to select three fiducials on the subject mesh (left shoulder, right shoulder, chin))
 all_meshes = cr_check_registration(S);
 
 %now we can save individual meshes in the space of opm sensor space
-mesh_torso = all_meshes.mesh_torso;
-mesh_spine = all_meshes.mesh_spine;
-mesh_bone = all_meshes.mesh_vertebrae;
-mesh_heart = all_meshes.mesh_heart;
-mesh_lungs = all_meshes.mesh_lungs;
+mesh_torso = all_meshes.torso;
+mesh_spine = all_meshes.spine;
+mesh_bone = all_meshes.bone;
+mesh_heart = all_meshes.heart;
+mesh_lungs = all_meshes.lungs;
+mesh_brain = all_meshes.brain;
+mesh_iskull = all_meshes.iskull;
+mesh_oskull = all_meshes.oskull;
 
-%create a source grid along the centerline of the spinal cord
+%% create a source grid along the centerline of the spinal cord
 
 y_min = min(mesh_spine.vertices(:,2));
 y_max = max(mesh_spine.vertices(:,2));
 
 S = [];
 S.spine = mesh_spine;
-S.T = T;
+S.T = all_meshes.transform;
 S.resolution = 5; 
 S.ylim = [y_min y_max];
 S.unit = 'mm';
-sources_center_line = cr_generate_spine_center(S);
+sources_spine = cr_generate_spine_center(S);
 
-%from here we now have a transform matrix (T), source grid and all relevent meshes in opm sensor space - this is everything we need for BEM and FEM forward modelling!
+%% create source grid in the brain
 
-transform_matrix = T; %need this for BEM 
+bb_min = min(mesh_brain.vertices);
+bb_max = max(mesh_brain.vertices);
+
+[x,y,z] = ndgrid(...
+    linspace(bb_min(1), bb_max(1), 10), ...
+    linspace(bb_min(2), bb_max(2), 10), ...
+    linspace(bb_min(3), bb_max(3), 10));
+
+cand = [x(:) y(:) z(:)];
+
+inside = false(size(cand,1),1);
+for i = 1:size(cand,1)
+    inside(i) = tt_is_inside(cand(i,:), mesh_brain.vertices, mesh_brain.faces);
+end
+
+sources_brain = [];
+sources_brain.pos = cand(inside,:);
+sources_brain.inside = true(size(sources_brain.pos,1),1);
+sources_brain.unit = 'm';
+
+%% visualise all sources
+figure;
+hold on;
+
+ft_plot_mesh(mesh_torso, 'facecolor', 'purple', 'facealpha', 0.2, 'edgecolor', 'none');
+ft_plot_mesh(mesh_brain, 'facecolor', 'b', 'facealpha', 0.2, 'edgecolor', 'none');
+ft_plot_mesh(mesh_spine, 'facecolor', 'r', 'facealpha', 0.2, 'edgecolor', 'none');
+
+plot3(sources_spine.pos(:,1), sources_spine.pos(:,2), sources_spine.pos(:,3), ...
+    'k.', 'MarkerSize', 10);
+
+plot3(sources_brain.pos(:,1), sources_brain.pos(:,2), sources_brain.pos(:,3), ...
+    'k.', 'MarkerSize', 10);
+
+axis equal
+xlabel('X (m)')
+ylabel('Y (m)')
+zlabel('Z (m)')
+title('Torso, Brain, Cord meshes with sources')
+view(3)
+camlight; lighting gouraud;
+
+hold off;
+%% from here we now have a transform matrix (T), source grid and all relevent meshes in opm sensor space - this is everything we need for BEM and FEM forward modelling!
 
 mesh_heart.vertices = mesh_heart.vertices; 
 mesh_heart.faces = mesh_heart.faces;
@@ -87,7 +143,14 @@ mesh_wm.faces = mesh_spine.faces;
 
 coils_3axis = sensors(D,'meg');
 
+mesh_brain.vertices = mesh_brain.vertices;
+mesh_brain.faces = mesh_brain.faces;
 
-sources_cent = sources_center_line;
+mesh_iskull.vertices = mesh_iskull.vertices;
+mesh_iskull.faces = mesh_iskull.faces;
 
-% Save to .mat
+mesh_oskull.vertices = mesh_oskull.vertices;
+mesh_oskull.faces = mesh_oskull.faces;
+
+sources_cent = sources_spine;
+sources_brain = sources_brain;% Save to .mat

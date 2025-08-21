@@ -20,6 +20,20 @@ function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTra
     tolerance = 1e-6;
     meshes = struct();  
 
+    % --- Mapping from variant filenames to core names ---
+    nameMap = containers.Map( ...
+        {'mri_full_spine', 'mri_cervical_spine', 'spine', 'cervical_spine', ...
+         'mri_full_bone', 'mri_cervical_bone', 'canonical_bone', 'cervical_bone', ...
+         'mri_torso', 'canonical_torso', ...
+         'mri_lungs', 'canonical_lungs', ...
+         'heart', 'canonical_heart'}, ...
+        {'spine', 'spine', 'spine', 'spine', ...
+         'bone', 'bone', 'bone', 'bone', ...
+         'torso', 'torso', ...
+         'lungs', 'lungs', ...
+         'heart', 'heart'} ...
+    );
+
     for i = 1:numel(fileNames)
         meshName = fileNames{i};
         stlFile = fullfile(coreg_path, [meshName, '.stl']);
@@ -47,8 +61,13 @@ function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTra
             mesh = spm_mesh_transform(mesh, transformMatrix);
         end
 
-        % Save under name
-        meshes.(meshName) = mesh;
+        % Map variant name to core name
+        if isKey(nameMap, meshName)
+            coreName = nameMap(meshName);
+        else
+            coreName = meshName; % fallback
+        end
+
+        meshes.(coreName) = mesh;
     end
 end
-

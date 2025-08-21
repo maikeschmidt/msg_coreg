@@ -54,17 +54,18 @@ end
 
 % load meshes
 meshes = cr_load_meshes(T, true, spineType, boneType, torsoType, lungType, heartType);
+torso = meshes.torso;
 
 % brain registration
 if isfield(S, 'brain') && S.brain
     disp('Please select three fiducials on the subject head: NAS, LPA, RPA');
-    brain_fids_select = spm_mesh_select(S.subject); 
+    brain_fids_select = spm_mesh_select(torso); 
     brain_fids = brain_fids_select';  
     
     % regS.subject   = S.subject;
     regS.fiducials = brain_fids;
-    regS.head      = S.subject; 
-    regS.plot      = false;
+    regS.head      = torso; 
+    regS.plot      = true;
     
     temp_brain = cr_register_brain(regS);
     

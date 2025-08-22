@@ -4,6 +4,7 @@ if ~isfield(S, 'subject'); error('Please provide a subject mesh'); end
 if ~isfield(S, 'sensors'); S.sensors = []; end
 if ~isfield(S, 'torso_mode'); error('Please set torso_mode = canonical or anatomical'); end
 if ~isfield(S, 'spine_mode'); S.spine_mode = 'full'; end
+if ~isfield(S, 'bone_mode'); S.bone_mode = 'default'; end   % <-- NEW
 
 % --- Step 1: get transform
 switch lower(S.torso_mode)
@@ -33,49 +34,69 @@ switch lower(S.torso_mode)
         torsoType = 'canonical_torso';
         if strcmpi(S.spine_mode, 'cervical')
             spineType = 'cervical_spine';
-            boneType  = 'cervical_bone';
         else
             spineType = 'spine';
-            boneType  = 'canonical_bone';
         end
+
     case 'anatomical'
         heartType = 'heart';
         lungType  = 'mri_lungs';
         torsoType = 'mri_torso';
         if strcmpi(S.spine_mode, 'cervical')
             spineType = 'mri_cervical_spine';
-            boneType  = 'mri_cervical_bone';
         else
             spineType = 'mri_full_spine';
-            boneType  = 'mri_full_bone';
         end
 end
 
+% --- Step 3: bone type logic (NEW)
+switch lower(S.bone_mode)
+    case 'realistic'
+        if strcmpi(S.spine_mode, 'cervical')
+            boneType = 'realistic_cervical_bone';
+        else
+            boneType = 'realistic_full_bone';
+        end
+    otherwise
+        % fall back to original MRI/canonical bones
+        if strcmpi(S.torso_mode, 'canonical')
+            if strcmpi(S.spine_mode, 'cervical')
+                boneType = 'cervical_bone';
+            else
+                boneType = 'canonical_bone';
+            end
+        else % anatomical
+            if strcmpi(S.spine_mode, 'cervical')
+                boneType = 'mri_cervical_bone';
+            else
+                boneType = 'mri_full_bone';
+            end
+        end
+end
 
-% load meshes
+% --- Step 4: load meshes
 meshes = cr_load_meshes(T, true, spineType, boneType, torsoType, lungType, heartType);
 torso = meshes.torso;
 
-% brain registration
+% --- Step 5: brain registration
 if isfield(S, 'brain') && S.brain
     disp('Please select three fiducials on the subject head: NAS, LPA, RPA');
     brain_fids_select = spm_mesh_select(torso); 
     brain_fids = brain_fids_select';  
-    
-    % regS.subject   = S.subject;
+
     regS.fiducials = brain_fids;
     regS.head      = torso; 
     regS.plot      = true;
-    
+
     temp_brain = cr_register_brain(regS);
-    
+
     meshes.brain  = temp_brain.brain;
     meshes.scalp  = temp_brain.scalp;
     meshes.iskull = temp_brain.iskull;
     meshes.oskull = temp_brain.oskull;
 end
 
-
+% --- Step 6: plotting
 figure('Name','Registration check','Color','w'); hold on;
 
 % Subject surface (grey)
@@ -93,7 +114,7 @@ for i = 1:numel(meshNames)
     
     mesh_i = meshes.(meshNames{i});
     
-    % Set colors based on mesh type using contains
+    % Set colors based on mesh type
     name = lower(meshNames{i});
     if contains(name, 'torso')
         c = [0.7 0.6 0.9];       % light purple
@@ -129,8 +150,10 @@ if ~isempty(S.sensors)
 end
 
 axis equal; grid on; view(3);
+lighting gouraud; camlight;
 legend(legendEntries, 'Interpreter','none');
-title(sprintf('Registration check (%s, %s spine)', S.torso_mode, S.spine_mode));
+title(sprintf('Registration check (%s torso, %s spine, %s bone)', ...
+    S.torso_mode, S.spine_mode, S.bone_mode));
 
 output_meshes = meshes;
 output_meshes.transform = T;

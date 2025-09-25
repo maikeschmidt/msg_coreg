@@ -4,7 +4,13 @@ if ~isfield(S, 'subject'); error('Please provide a subject mesh'); end
 if ~isfield(S, 'sensors'); S.sensors = []; end
 if ~isfield(S, 'torso_mode'); error('Please set torso_mode = canonical or anatomical'); end
 if ~isfield(S, 'spine_mode'); S.spine_mode = 'full'; end
-if ~isfield(S, 'bone_mode'); S.bone_mode = 'default'; end   % <-- NEW
+if ~isfield(S, 'bone_mode'); S.bone_mode = 'default'; end
+%paramteres needed if wanting to generate a sensor array - defualt = false
+if ~isfield(S, 'sensor_gen'); S.sensor_gen = 'false'; end
+if ~isfield(S,'resolution'); S.resolution = 30; end
+if ~isfield(S,'depth');      S.depth = -10; end
+if ~isfield(S,'margin');     S.margin = 50; end
+if ~isfield(S, 'coverage'); S.coverage = 0.6; end
 
 % --- Step 1: get transform
 switch lower(S.torso_mode)
@@ -49,34 +55,101 @@ switch lower(S.torso_mode)
         end
 end
 
-% --- Step 3: bone type logic (NEW)
+% --- Step 3: bone type logic 
 switch lower(S.bone_mode)
     case 'realistic'
+        if strcmpi(S.torso_mode, 'canonical')
+            error('Realistic bone meshes are not available for canonical mode.');
+        end
         if strcmpi(S.spine_mode, 'cervical')
             boneType = 'realistic_cervical_bone';
         else
             boneType = 'realistic_full_bone';
         end
-    otherwise
-        % fall back to original MRI/canonical bones
-        if strcmpi(S.torso_mode, 'canonical')
+
+    case 'inhomo'
+        if strcmpi(S.torso_mode, 'anatomical')
             if strcmpi(S.spine_mode, 'cervical')
-                boneType = 'cervical_bone';
+                boneType = 'mri_cervical_inhomo';
             else
-                boneType = 'canonical_bone';
+                boneType = 'mri_full_inhomo';
             end
-        else % anatomical
+        else % canonical
             if strcmpi(S.spine_mode, 'cervical')
-                boneType = 'mri_cervical_bone';
+                boneType = 'canonical_cervical_inhomo';
             else
-                boneType = 'mri_full_bone';
+                boneType = 'canonical_full_inhomo';
             end
         end
+
+    case 'homo'
+        if strcmpi(S.torso_mode, 'anatomical')
+            if strcmpi(S.spine_mode, 'cervical')
+                boneType = 'mri_cervical_homo';
+            else
+                boneType = 'mri_full_homo';
+            end
+        else % canonical
+            if strcmpi(S.spine_mode, 'cervical')
+                boneType = 'canonical_cervical_homo';
+            else
+                boneType = 'canonical_full_homo';
+            end
+        end
+
+    case 'cont'
+        if strcmpi(S.torso_mode, 'anatomical')
+            if strcmpi(S.spine_mode, 'cervical')
+                boneType = 'mri_cervical_cont';
+            else
+                boneType = 'mri_full_cont';
+            end
+        else % canonical
+            if strcmpi(S.spine_mode, 'cervical')
+                boneType = 'canonical_cervical_cont';
+            else
+                boneType = 'canonical_full_cont';
+            end
+        end
+
+    otherwise
+        error('Unknown bone_mode "%s". Valid options: realistic, inhomo, homo, cont.', S.bone_mode);
 end
+
 
 % --- Step 4: load meshes
 meshes = cr_load_meshes(T, true, spineType, boneType, torsoType, lungType, heartType);
+if isfield(meshes, spineType)
+    meshes.spine = meshes.(spineType);
+    if ~strcmp(spineType, 'spine')
+        meshes = rmfield(meshes, spineType); % remove old field
+    end
+end
 torso = meshes.torso;
+
+% --- Step 4b: optional sensor generation
+if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar(S.sensor_gen) && strcmpi(S.sensor_gen,'true'))
+    % Generate back sensors
+    S_v3 = [];
+    S_v3.torso = torso;
+    S_v3.resolution = S.resolution;
+    S_v3.depth      = S.depth;
+    S_v3.margin     = S.margin;
+    S_v3.coverage = S.coverage;
+    S_v3.frontflag  = 1;   % back sensors (flag=1)
+    S_v3.triaxial   = 1;
+    S_v3.debug      = false;
+    back_sensors = cr_generate_sensor_array_v3(S_v3);
+
+    % Generate front sensors
+    S_v3.frontflag = 0; % front sensors (flag=0)
+    front_sensors = cr_generate_sensor_array_v3(S_v3);
+
+    % Add to output
+    meshes.back_sensors  = back_sensors;
+    meshes.front_sensors = front_sensors;
+end
+
 
 % --- Step 5: brain registration
 if isfield(S, 'brain') && S.brain
@@ -107,11 +180,11 @@ legendEntries = {'Subject'};
 
 % Simulation meshes
 meshNames = fieldnames(meshes);
+sensorFields = {'front_sensors','back_sensors'};
 for i = 1:numel(meshNames)
-    if contains(lower(meshNames{i}), 'scalp')
-        continue;  
+    if ismember(meshNames{i}, sensorFields)
+        continue; % skip sensors
     end
-    
     mesh_i = meshes.(meshNames{i});
     
     % Set colors based on mesh type
@@ -148,6 +221,14 @@ if ~isempty(S.sensors)
     ft_plot_sens(S.sensors)
     legendEntries{end+1} = 'Sensors';
 end
+% Sensors (if generated)
+if isfield(meshes,'back_sensors') && ~isempty(meshes.back_sensors)
+    ft_plot_sens(meshes.back_sensors);
+end
+if isfield(meshes,'front_sensors') && ~isempty(meshes.front_sensors)
+    ft_plot_sens(meshes.front_sensors);
+end
+
 
 axis equal; grid on; view(3);
 lighting gouraud; camlight;

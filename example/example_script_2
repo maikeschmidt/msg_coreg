@@ -1,34 +1,7 @@
-%% Example script to co-register between OPM sensor positions, Optical Scan, and Simulation mesh models
+%% Example script to create a series of meshes which can be used for simulations and forward modelling
 
-% This pipeline is implemented for a subject dataset where we have the subject scan already in OPM sensor
-% space, and hence we can skip registering the subject mesh to the opm sensors and go straight to pulling in
-% the mesh models
+%% Load and process the optical scan - this is the optical scan to which you want to register the simulation meshes to
 
-%%
-
-% First, need to create the spm opm structure to extract the sensor positions
-% cd('coreg_path\example')
-clearvars
-close all
-clc
-
-cd('D:\');
-Metadata;
-
-sub = 'OP00210';
-posfile_back = 'D:\OPM\sub-OP00210\scannercast_positions\positions_all_OP00210.tsv';
-savepath = fullfile('D:\OPM\', ['sub-OP', sub(3:end)], 'nervesim');
-cd(savepath)
-
-D = {}; 
-filetemplate = sprintf('nervesim-right-run_002_array1.lvm');
-S = struct(); 
-S.data = filetemplate;
-S.positions = posfile_back; 
-D = spm_opm_create(S); 
-
-%% Load and process the optical scan
-cd('D:\OPM\scannercast')
 optical = ft_read_headshape('surface.stl', 'unit', 'mm');
 p = struct();
 p.vertices = optical.pos;
@@ -43,88 +16,85 @@ mesh.vertices = subject.pos;
 mesh.faces = subject.tri;
 mesh.unit = 'mm'; % Define unit explicitly - make sure it matches the grad structure!
 
-%%
-% now we need to register the simulation meshes to the optical scan which
-% is in opm sensor space - but we know what the transform matrix is so can
-% just go ahead and apply this
-% 
+%% Load all simulation meshes + Create Sensor array 
+% if creating specifically for source reconstruction of collected data make sure the optical scan above is 
+% in sensor space or use example script 1 to register in sensor space.
+% if you already have sensors set S.sensor_gen to false
+
 S = []; 
 S.subject = mesh;
-S.sensors = sensors(D, 'MEG'); 
+% S.sensors = sensors;
+S.sensor_gen = true; %generate sensors (front and back separatly)
+S.resolution = 30; % spacing between sensors
+S.depth = -10; %sensor offset from mesh surface
+S.coverage = [0.25 0.25 0.15 0.15]; %fraction of axis to NOT cover in sensors; top, bottom, left, right (a single number such as 0.6 will cover the top 60% of the mesh)
+S.spine_mode = 'full'; %which spine model to load (full or cervical)
+S.torso_mode = 'anatomical'; %perfect mri co-reg or manual fid selection (anatomical or canonical)
+S.bone_mode = 'realistic'; %type of bone model to load (cont, homo, inhomo, realistic)
 S.brain = true;
-S.spine_mode = 'cervical'; %full or cervical
-S.torso_mode = 'anatomical'; %anatomical or canonical (if choosing canonical - you will need to select three fiducials on the subject mesh (left shoulder, right shoulder, chin))
 all_meshes = cr_check_registration(S);
 
-%now we can save individual meshes in the space of opm sensor space
+
 mesh_torso = all_meshes.torso;
 mesh_spine = all_meshes.spine;
 mesh_bone = all_meshes.bone;
 mesh_heart = all_meshes.heart;
 mesh_lungs = all_meshes.lungs;
 mesh_brain = all_meshes.brain;
-mesh_iskull = all_meshes.iskull;
-mesh_oskull = all_meshes.oskull;
+mesh_skull = all_meshes.oskull;
 
-%% create a source grid along the centerline of the spinal cord
-
+sensors_back = all_meshes.back_sensors;
+sensors_front = all_meshes.front_sensors;
+ 
+%% create spine sources
 y_min = min(mesh_spine.vertices(:,2));
 y_max = max(mesh_spine.vertices(:,2));
 
 S = [];
 S.spine = mesh_spine;
-S.T = all_meshes.transform;
 S.resolution = 5; 
 S.ylim = [y_min y_max];
 S.unit = 'mm';
-sources_spine = cr_generate_spine_center(S);
+spine_sources = cr_generate_spine_center(S);
 
-%% create source grid in the brain
-
-bb_min = min(mesh_brain.vertices);
-bb_max = max(mesh_brain.vertices);
-
-[x,y,z] = ndgrid(...
-    linspace(bb_min(1), bb_max(1), 10), ...
-    linspace(bb_min(2), bb_max(2), 10), ...
-    linspace(bb_min(3), bb_max(3), 10));
-
-cand = [x(:) y(:) z(:)];
-
-inside = false(size(cand,1),1);
-for i = 1:size(cand,1)
-    inside(i) = tt_is_inside(cand(i,:), mesh_brain.vertices, mesh_brain.faces);
-end
-
-sources_brain = [];
-sources_brain.pos = cand(inside,:);
-sources_brain.inside = true(size(sources_brain.pos,1),1);
-sources_brain.unit = 'm';
-
-%% visualise all sources
 figure;
 hold on;
-
-ft_plot_mesh(mesh_torso, 'facecolor', 'purple', 'facealpha', 0.2, 'edgecolor', 'none');
-ft_plot_mesh(mesh_brain, 'facecolor', 'b', 'facealpha', 0.2, 'edgecolor', 'none');
-ft_plot_mesh(mesh_spine, 'facecolor', 'r', 'facealpha', 0.2, 'edgecolor', 'none');
-
-plot3(sources_spine.pos(:,1), sources_spine.pos(:,2), sources_spine.pos(:,3), ...
-    'k.', 'MarkerSize', 10);
-
-plot3(sources_brain.pos(:,1), sources_brain.pos(:,2), sources_brain.pos(:,3), ...
-    'k.', 'MarkerSize', 10);
-
-axis equal
-xlabel('X (m)')
-ylabel('Y (m)')
-zlabel('Z (m)')
-title('Torso, Brain, Cord meshes with sources')
-view(3)
-camlight; lighting gouraud;
-
+ft_plot_mesh(mesh_spine, 'facecolor', 'red', 'edgecolor', 'none', 'facealpha', 0.2)
+ft_plot_mesh(mesh_bone, 'facecolor', 'none', 'edgecolor', 'blue')
+scatter3(spine_sources.pos(:,1),spine_sources.pos(:,2),spine_sources.pos(:,3),'k.')
 hold off;
-%% from here we now have a transform matrix (T), source grid and all relevent meshes in opm sensor space - this is everything we need for BEM and FEM forward modelling!
+
+%% Create Brain sources
+
+brain_vertices = mesh_brain.vertices;
+
+x_min = min(brain_vertices(:,1));
+x_max = max(brain_vertices(:,1));
+y_min = min(brain_vertices(:,2));
+y_max = max(brain_vertices(:,2));
+z_min = min(brain_vertices(:,3));
+z_max = max(brain_vertices(:,3));
+
+resolution = 5;  % change this to whatever you want
+
+[x_grid, y_grid, z_grid] = ndgrid(...
+    x_min:resolution:x_max, ...
+    y_min:resolution:y_max, ...
+    z_min:resolution:z_max);
+
+grid_points = [x_grid(:), y_grid(:), z_grid(:)];
+
+inside_idx = inpolyhedron(mesh_brain.faces, mesh_brain.vertices, grid_points);
+brain_sources = grid_points(inside_idx, :);
+
+source_grid = [];
+source_grid.pos = brain_sources;      
+source_grid.inside = true(size(brain_sources,1),1); 
+source_grid.unit = 'mm';
+
+fprintf('Created %d source points inside the brain mesh.\n', size(brain_sources,1));
+
+%% this is everything we need for BEM and FEM forward modelling!
 
 mesh_heart.vertices = mesh_heart.vertices; 
 mesh_heart.faces = mesh_heart.faces;
@@ -141,16 +111,26 @@ mesh_torso.faces = mesh_torso.faces;
 mesh_wm.vertices = mesh_spine.vertices;
 mesh_wm.faces = mesh_spine.faces;
 
-coils_3axis = sensors(D,'meg');
+back_coils_3axis.positions = back_sensors.coilpos;
+back_coils_3axis.orientations = back_sensors.coilori;
+
+front_coils_3axis.positions = front_sensors.coilpos;
+front_coils_3axis.orientations = front_sensors.coilori;
 
 mesh_brain.vertices = mesh_brain.vertices;
 mesh_brain.faces = mesh_brain.faces;
+ 
+mesh_oskull.vertices = mesh_skull.vertices;
+mesh_oskull.faces = mesh_skull.faces;
 
-mesh_iskull.vertices = mesh_iskull.vertices;
-mesh_iskull.faces = mesh_iskull.faces;
+sources_cent = spine_sources;
 
-mesh_oskull.vertices = mesh_oskull.vertices;
-mesh_oskull.faces = mesh_oskull.faces;
+sources_brain = source_grid.pos;
 
-sources_cent = sources_spine;
-sources_brain = sources_brain;% Save to .mat
+% coils_3axis = sensors;
+
+transform_matrix = all_meshes.transform;
+
+% Save to .mat
+save('geometries_cervical_realistic.mat', 'mesh_wm', 'mesh_bone', 'mesh_heart',...
+    'mesh_lungs', 'mesh_torso', 'mesh_brain', 'mesh_oskull','coils_3axis','sources_cent', 'sources_brain', 'transform_matrix');

@@ -174,58 +174,84 @@ end
 % Step 6: plotting
 figure('Name','Registration check','Color','w'); hold on;
 
-% Subject surface (grey)
-patch('Vertices', S.subject.vertices, ...
-      'Faces', S.subject.faces, ...
-      'EdgeAlpha',0.1,'EdgeColor','[0.8 0.8 0.8]','FaceColor','none');
+% === Subject surface (grey outline only) ===
+if isfield(S.subject, 'vertices') && isfield(S.subject, 'faces')
+    patch('Vertices', S.subject.vertices, ...
+          'Faces', S.subject.faces, ...
+          'EdgeAlpha', 0.1, ...
+          'EdgeColor', [0.8 0.8 0.8], ...
+          'FaceColor', 'none');
+else
+    warning('Subject mesh missing vertices/faces; skipping subject surface plot.');
+end
 legendEntries = {'Subject'};
 
-% Simulation meshes
+% === Simulation meshes ===
 meshNames = fieldnames(meshes);
 sensorFields = {'front_sensors','back_sensors'};
+
 for i = 1:numel(meshNames)
     if ismember(meshNames{i}, sensorFields)
         continue; % skip sensors
     end
+
     mesh_i = meshes.(meshNames{i});
-    
-    % Set colors based on mesh type
-    name = lower(meshNames{i});
-    if contains(name, 'torso')
-        c = [0.7 0.6 0.9];       % light purple
-    elseif contains(name, 'spine')
-        c = [1.0 0.0 0.0];       % red
-    elseif contains(name, 'bone')
-        c = [1.0 1.0 0.0];       % yellow
-    elseif contains(name, 'lung')
-        c = [0.0 0.0 1.0];       % blue
-    elseif contains(name, 'heart')
-        c = [0.0 1.0 0.0];       % green
-    elseif contains(name, 'brain')
-        c = [0.3 0.3 0.9];       % deep blue
-    elseif contains(name, 'iskull')
-        c = [0.8 0.8 0.8];       % grey
-    elseif contains(name, 'oskull')
-        c = [0.5 0.5 0.5];       % darker grey
-    elseif contains(name, 'vagus')
-        c = [1.0 0.2 0.8];       % magenta-ish for vagus nerve
-    else
-        c = [0.5 0.5 0.5];       % default grey
+    if isempty(mesh_i) || ~isfield(mesh_i,'vertices') || ~isfield(mesh_i,'faces') ...
+            || isempty(mesh_i.vertices) || isempty(mesh_i.faces)
+        warning('Mesh "%s" is empty or malformed — skipping.', meshNames{i});
+        continue;
     end
-    
+
+    % Default colour and transparency
+    c = [0.5 0.5 0.5];
+    alphaVal = 0.3;
+
+    % Assign per-mesh colour
+    name = lower(meshNames{i});
+    if contains(name, 'vagus_nerve')
+        c = [1.0 0.2 0.8];   % bright magenta
+        alphaVal = 1.0;      % fully opaque so it’s clearly visible
+    elseif contains(name, 'torso')
+        c = [0.7 0.6 0.9];   % light purple
+        alphaVal = 0.3;
+    elseif contains(name, 'spine')
+        c = [1.0 0.0 0.0];   % red
+        alphaVal = 0.4;
+    elseif contains(name, 'bone')
+        c = [1.0 1.0 0.0];   % yellow
+        alphaVal = 0.3;
+    elseif contains(name, 'lung')
+        c = [0.0 0.0 1.0];   % blue
+        alphaVal = 0.3;
+    elseif contains(name, 'heart')
+        c = [0.0 1.0 0.0];   % green
+        alphaVal = 0.4;
+    elseif contains(name, 'brain')
+        c = [0.3 0.3 0.9];   % deep blue
+        alphaVal = 0.35;
+    elseif contains(name, 'iskull')
+        c = [0.8 0.8 0.8];
+        alphaVal = 0.35;
+    elseif contains(name, 'oskull')
+        c = [0.5 0.5 0.5];
+        alphaVal = 0.35;
+    end
+
+    % Plot this mesh
     patch('Vertices', mesh_i.vertices, ...
           'Faces', mesh_i.faces, ...
-          'FaceAlpha',0.3,'EdgeColor','none','FaceColor',c);
-    
-    legendEntries{end+1} = meshNames{i}; 
+          'FaceAlpha', alphaVal, ...
+          'EdgeColor', 'none', ...
+          'FaceColor', c);
+
+    legendEntries{end+1} = meshNames{i};
 end
 
-% Sensors (if provided)
+% === Sensors (if provided) ===
 if ~isempty(S.sensors)
     ft_plot_sens(S.sensors)
     legendEntries{end+1} = 'Sensors';
 end
-% Sensors (if generated)
 if isfield(meshes,'back_sensors') && ~isempty(meshes.back_sensors)
     ft_plot_sens(meshes.back_sensors);
 end
@@ -233,7 +259,7 @@ if isfield(meshes,'front_sensors') && ~isempty(meshes.front_sensors)
     ft_plot_sens(meshes.front_sensors);
 end
 
-
+% === Final plot settings ===
 axis equal; grid on; view(3);
 lighting gouraud; camlight;
 legend(legendEntries, 'Interpreter','none');

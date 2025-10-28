@@ -12,7 +12,7 @@ if ~isfield(S,'depth');      S.depth = -10; end
 if ~isfield(S,'margin');     S.margin = 50; end
 if ~isfield(S, 'coverage'); S.coverage = 0.6; end
 
-% --- Step 1: get transform
+% Step 1: get transform
 switch lower(S.torso_mode)
     case 'canonical'
         % Prompt fiducials
@@ -32,7 +32,7 @@ switch lower(S.torso_mode)
         error('Unknown torso_mode %s', S.torso_mode);
 end
 
-% --- Step 2: decide filenames
+% Step 2: decide filenames
 switch lower(S.torso_mode)
     case 'canonical'
         heartType = 'canonical_heart';
@@ -55,7 +55,7 @@ switch lower(S.torso_mode)
         end
 end
 
-% --- Step 3: bone type logic 
+% Step 3: bone type logic 
 switch lower(S.bone_mode)
     case 'realistic'
         if strcmpi(S.torso_mode, 'canonical')
@@ -117,8 +117,10 @@ switch lower(S.bone_mode)
 end
 
 
-% --- Step 4: load meshes
-meshes = cr_load_meshes(T, true, spineType, boneType, torsoType, lungType, heartType);
+% Step 4: load meshes
+% include vagus only for anatomical torso_mode
+includeVagus = strcmpi(S.torso_mode, 'anatomical');
+meshes = cr_load_meshes(T, true, spineType, boneType, torsoType, lungType, heartType, includeVagus);
 if isfield(meshes, spineType)
     meshes.spine = meshes.(spineType);
     if ~strcmp(spineType, 'spine')
@@ -127,7 +129,7 @@ if isfield(meshes, spineType)
 end
 torso = meshes.torso;
 
-% --- Step 4b: optional sensor generation
+% Step 4b: optional sensor generation
 if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar(S.sensor_gen) && strcmpi(S.sensor_gen,'true'))
     % Generate back sensors
     S_v3 = [];
@@ -151,7 +153,7 @@ if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar
 end
 
 
-% --- Step 5: brain registration
+% Step 5: brain registration
 if isfield(S, 'brain') && S.brain
     disp('Please select three fiducials on the subject head: NAS, LPA, RPA');
     brain_fids_select = spm_mesh_select(torso); 
@@ -169,7 +171,7 @@ if isfield(S, 'brain') && S.brain
     meshes.oskull = temp_brain.oskull;
 end
 
-% --- Step 6: plotting
+% Step 6: plotting
 figure('Name','Registration check','Color','w'); hold on;
 
 % Subject surface (grey)
@@ -205,6 +207,8 @@ for i = 1:numel(meshNames)
         c = [0.8 0.8 0.8];       % grey
     elseif contains(name, 'oskull')
         c = [0.5 0.5 0.5];       % darker grey
+    elseif contains(name, 'vagus')
+        c = [1.0 0.2 0.8];       % magenta-ish for vagus nerve
     else
         c = [0.5 0.5 0.5];       % default grey
     end
@@ -240,3 +244,4 @@ output_meshes = meshes;
 output_meshes.transform = T;
 
 end
+

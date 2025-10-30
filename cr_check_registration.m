@@ -133,19 +133,20 @@ torso = meshes.torso;
 if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar(S.sensor_gen) && strcmpi(S.sensor_gen,'true'))
     % Generate back sensors
     S_v3 = [];
-    S_v3.torso = torso;
+    S_v3.subject = S.subject;
+    S_v3.T = T;
     S_v3.resolution = S.resolution;
     S_v3.depth      = S.depth;
     S_v3.margin     = S.margin;
     S_v3.coverage = S.coverage;
     S_v3.frontflag  = 1;   % back sensors (flag=1)
     S_v3.triaxial   = 1;
-    S_v3.debug      = false;
-    back_sensors = cr_generate_sensor_array_v3(S_v3);
+    S_v3.torsotype = S.torso_mode;
+    back_sensors = cr_generate_sensor_array_v4(S_v3);
 
     % Generate front sensors
     S_v3.frontflag = 0; % front sensors (flag=0)
-    front_sensors = cr_generate_sensor_array_v3(S_v3);
+    front_sensors = cr_generate_sensor_array_v4(S_v3);
 
     % Add to output
     meshes.back_sensors  = back_sensors;

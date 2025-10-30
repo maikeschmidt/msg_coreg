@@ -9,7 +9,7 @@ switch lower(torsotype)
         % load anatomical fiducials
         fids = [
     30.114 141.137 127.07 
-    39.799 142.93 -125.9 r
+    39.799 142.93 -125.9 
     -49.1 188.98 -12.184 
     93.691 -163.67 -7.542 
 ];
@@ -24,4 +24,5 @@ switch lower(torsotype)
     otherwise
         error('Unknown torsotype: %s', torsotype);
 end
+
 end

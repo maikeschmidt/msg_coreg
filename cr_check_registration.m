@@ -119,8 +119,8 @@ end
 
 % Step 4: load meshes
 % include vagus only for anatomical torso_mode
-includeVagus = strcmpi(S.torso_mode, 'anatomical');
-meshes = cr_load_meshes(T, true, spineType, boneType, torsoType, lungType, heartType, includeVagus);
+includeMuscle = strcmpi(S.torso_mode, 'anatomical');
+meshes = cr_load_meshes(T, true, spineType, boneType, torsoType, lungType, heartType, includeMuscle);
 if isfield(meshes, spineType)
     meshes.spine = meshes.(spineType);
     if ~strcmp(spineType, 'spine')
@@ -209,9 +209,9 @@ for i = 1:numel(meshNames)
 
     % Assign per-mesh colour
     name = lower(meshNames{i});
-    if contains(name, 'vagus_nerve')
+    if contains(name, 'back_muscle')
         c = [1.0 0.2 0.8];   % bright magenta
-        alphaVal = 1.0;      % fully opaque so it’s clearly visible
+        alphaVal = 0.3;      
     elseif contains(name, 'torso')
         c = [0.7 0.6 0.9];   % light purple
         alphaVal = 0.3;
@@ -269,6 +269,6 @@ title(sprintf('Registration check (%s torso, %s spine, %s bone)', ...
 
 output_meshes = meshes;
 output_meshes.transform = T;
-
+% output_meshes.brains_transform_mat = temp_brain.transform_matrix;
 end
 

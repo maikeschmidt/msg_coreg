@@ -8,12 +8,41 @@ if ~isfield(S,'dist'), S.dist = 0.02; end
 if ~isfield(S,'plot'), S.plot = false; end
 
 % Load the canonical torso and generate fiducials
-%----------------------------------------------
 torso_file = fullfile(coreg_path,'canonical_torso.stl'); % Units: m
-torso_temp = stlread(torso_file);
-torso = [];
-torso.vertices = torso_temp.vertices;
-torso.faces = torso_temp.faces;
+
+stl_data = stlread(torso_file);
+torso = struct();
+
+if isa(stl_data, 'triangulation')
+    torso.vertices = stl_data.Points;
+    torso.faces    = stl_data.ConnectivityList;
+
+elseif isstruct(stl_data)
+
+    if isfield(stl_data,'vertices') && isfield(stl_data,'faces')
+        torso.vertices = stl_data.vertices;
+        torso.faces    = stl_data.faces;
+
+    elseif isfield(stl_data,'Vertices') && isfield(stl_data,'Faces')
+        torso.vertices = stl_data.Vertices;
+        torso.faces    = stl_data.Faces;
+
+    elseif isfield(stl_data,'points') && isfield(stl_data,'ConnectivityList')
+        torso.vertices = stl_data.points;
+        torso.faces    = stl_data.ConnectivityList;
+
+    elseif isfield(stl_data,'pts') && isfield(stl_data,'tri')
+        torso.vertices = stl_data.pts;
+        torso.faces    = stl_data.tri;
+
+    else
+        error('Unsupported STL format in %s: cannot find vertices/faces.', torso_file);
+    end
+
+else
+    error('Unknown data type returned by stlread for %s.', torso_file);
+end
+
 
 % Fiducials of the torso
 % - Left shoulder (point 3107)
@@ -26,7 +55,6 @@ torso_fids = [torso.vertices(3104,:);
               torso.vertices(858,:)];
               % torso.vertices(5556,:)];
 % Step 1: Normalize units between subject and canonical torso
-%--------------------------------------------------------
 sf = determine_body_scan_units(S.fiducials, torso_fids);
 M0 = diag([sf, sf, sf, 1]); % Scaling matrix
 
@@ -39,7 +67,6 @@ torso_fids = [torso.vertices(3104,:);
               % torso.vertices(5556,:)]; % Update fiducials after scaling
 
 % Step 2: Rigid body transform based on fiducial alignment
-%--------------------------------------------------------
 M1 = spm_eeg_inv_rigidreg(S.fiducials', torso_fids');
 torso.vertices = (M1 * [torso.vertices, ones(size(torso.vertices,1),1)]')';
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
@@ -50,7 +77,6 @@ torso_fids = [torso.vertices(3104,:);
               % torso.vertices(5556,:)];% Update fiducials
 
 % Step 3: ICP Refinement
-%--------------------------------------------------------
 [~, D] = knnsearch(S.subject.vertices, torso.vertices);
 id = find(D <= S.dist * sf); % Select closest points
 
@@ -61,7 +87,6 @@ torso.vertices = (M2 * [torso.vertices, ones(size(torso.vertices,1),1)]')';
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
 
 % Step 4: Visualization (Plotting)
-%--------------------------------------------------------
 if S.plot
     figure; clf;
     hold on;

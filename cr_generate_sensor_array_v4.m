@@ -42,8 +42,38 @@ if ~isfile(torso_file)
     error('Torso mesh not found: %s', torso_file);
 end
 
-torso = stlread(torso_file);
+stl_data = stlread(torso_file);
+torso = struct();
 
+if isa(stl_data, 'triangulation')
+    % New MATLAB stlread
+    torso.vertices = stl_data.Points;
+    torso.faces    = stl_data.ConnectivityList;
+
+elseif isstruct(stl_data)
+    if isfield(stl_data,'vertices') && isfield(stl_data,'faces')
+        torso.vertices = stl_data.vertices;
+        torso.faces    = stl_data.faces;
+
+    elseif isfield(stl_data,'Vertices') && isfield(stl_data,'Faces')
+        torso.vertices = stl_data.Vertices;
+        torso.faces    = stl_data.Faces;
+
+    elseif isfield(stl_data,'points') && isfield(stl_data,'ConnectivityList')
+        torso.vertices = stl_data.points;
+        torso.faces    = stl_data.ConnectivityList;
+
+    elseif isfield(stl_data,'pts') && isfield(stl_data,'tri')
+        torso.vertices = stl_data.pts;
+        torso.faces    = stl_data.tri;
+
+    else
+        error('Unsupported STL structure: cannot find vertices/faces fields.');
+    end
+
+else
+    error('Unknown STL format returned by stlread.');
+end
 
 % Load fiducials corresponding to torso type
 fids = cr_get_fids(S.torsotype);  
@@ -302,11 +332,36 @@ if strcmp(S.senstype,'elec')
 
     % FieldTrip formatting
     elec = ft_datatype_sens(elec, 'amplitude', [], 'distance', elec.unit);
+    
 
     grad = elec;  
     fprintf('EEG electrode generation complete! (%d electrodes)\n', nSens);
 end
 
+% Explicit EEG reference handling 
+if strcmp(S.senstype,'elec')
+    nElec = size(grad.elecpos,1);  % number of electrodes
+    elec = grad;  % rename for clarity
+
+    % --- Default: common-average reference ---
+    % Each channel = electrode_i - mean(all electrodes)
+    tra = -ones(nElec) / nElec;
+    for k = 1:nElec
+        tra(k,k) = tra(k,k) + 1;  % diagonal = 1 - 1/n
+    end
+    elec.tra = sparse(tra);  % store as sparse matrix
+
+    % Set channel positions identical to electrodes
+    elec.chanpos = elec.elecpos;
+
+    % Update labels if you want channel names = electrode names
+    elec.label = elec.label;  % leave unchanged or modify if needed
+
+    % Store back
+    grad = elec;
+
+    fprintf('EEG electrode reference matrix (tra) created: %d electrodes, common-average.\n', nElec);
+end
 
 fprintf('Sensor array generation complete! (%d sensors)\n', nSensors);
 end

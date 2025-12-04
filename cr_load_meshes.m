@@ -58,46 +58,59 @@ function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTra
         tempMesh = stlread(stlFile);
 
         % Detect STL structure format
-        if isstruct(tempMesh)
+                tempMesh = stlread(stlFile);
+        
+                % Detect STL output format
+                if isa(tempMesh, 'triangulation')
+                    % Modern MATLAB stlread → triangulation object
+                    V = tempMesh.Points;
+                    F = tempMesh.ConnectivityList;
+        
+                elseif isstruct(tempMesh)
+        
+                    % Struct-based STL readers
+                    if isfield(tempMesh, 'vertices') && isfield(tempMesh, 'faces')
+                        V = tempMesh.vertices;
+                        F = double(tempMesh.faces);
+        
+                    elseif isfield(tempMesh, 'pos') && isfield(tempMesh, 'tri')
+                        V = tempMesh.pos;
+                        F = double(tempMesh.tri);
+        
+                    else
+                        error(['Unsupported STL structure format. Fields found: ', ...
+                               strjoin(fieldnames(tempMesh), ', ')]);
+                    end
+        
+                elseif isnumeric(tempMesh)
+        
+                    % Very old STL readers returning only vertices
+                    if size(tempMesh,2) == 3
+                        error(['stlread returned only vertices. Faces are missing and ', ...
+                               'must be reconstructed or a different stlread must be used.']);
+                    else
+                        error('Unrecognized numeric STL output format.');
+                    end
+        
+                else
+                    error('Unsupported output type from stlread: %s', class(tempMesh));
+                end
+        
+                % Deduplicate vertices
+                V_rounded = round(V * (1 / tolerance)) * tolerance;
+                [V_unique, ~, ic] = unique(V_rounded, 'rows', 'stable');
+                F_fixed = ic(F);
+        
+                % Build mesh
+                mesh.vertices = V_unique;
+                mesh.faces    = F_fixed;
+                mesh.unit     = 'mm';
+        
+                % Optional transform
+                if applyTransform
+                    mesh = spm_mesh_transform(mesh, transformMatrix);
+                end
 
-            if isfield(tempMesh, 'vertices') && isfield(tempMesh, 'faces')
-                V = tempMesh.vertices;
-                F = double(tempMesh.faces);
-
-            elseif isfield(tempMesh, 'pos') && isfield(tempMesh, 'tri')
-                V = tempMesh.pos;
-                F = double(tempMesh.tri);
-
-            else
-                error('stlread: Unsupported STL structure format. Fields found: %s', strjoin(fieldnames(tempMesh)));
-            end
-
-        elseif isnumeric(tempMesh)
-            % Very old stlread versions return only vertices
-            if size(tempMesh,2) == 3
-                V = tempMesh;
-                error('stlread returned vertex-only matrix. Faces must be generated manually.');
-            else
-                error('stlread: Unrecognized numeric matrix output.');
-            end
-        else
-            error('stlread: Unexpected output type: %s', class(tempMesh));
-        end
-
-        % Deduplicate vertices
-        V_rounded = round(V * (1 / tolerance)) * tolerance;
-        [V_unique, ~, ic] = unique(V_rounded, 'rows', 'stable');
-        F_fixed = ic(F);
-
-        % Assign mesh
-        mesh.vertices = V_unique;
-        mesh.faces    = F_fixed;
-        mesh.unit     = 'mm';
-
-        % Optional transform
-        if applyTransform
-            mesh = spm_mesh_transform(mesh, transformMatrix);
-        end
 
         % Map variant name → core name
         if isKey(nameMap, meshName)

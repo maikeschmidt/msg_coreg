@@ -11,6 +11,11 @@ if ~isfield(S,'resolution'); S.resolution = 30; end
 if ~isfield(S,'depth');      S.depth = -10; end
 if ~isfield(S,'margin');     S.margin = 50; end
 if ~isfield(S, 'coverage'); S.coverage = 0.6; end
+% MEG/EEG mode ('grad' = OPM/MEG; 'elec' = EEG)
+if ~isfield(S, 'senstype')
+    S.senstype = 'grad';   % default for MSG toolbox
+end
+
 
 % Step 1: get transform
 switch lower(S.torso_mode)
@@ -142,6 +147,7 @@ if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar
     S_v3.frontflag  = 1;   % back sensors (flag=1)
     S_v3.triaxial   = 1;
     S_v3.torsotype = S.torso_mode;
+    S_v3.senstype   = S.senstype;
     back_sensors = cr_generate_sensor_array_v4(S_v3);
 
     % Generate front sensors
@@ -248,19 +254,52 @@ for i = 1:numel(meshNames)
     legendEntries{end+1} = meshNames{i};
 end
 
-% === Sensors (if provided) ===
+% Sensors (MEG or EEG)
 if ~isempty(S.sensors)
-    ft_plot_sens(S.sensors)
+    if strcmpi(S.senstype,'elec')
+        % EEG plotting
+        ft_plot_sens(S.sensors, ...
+            'elec', true, ...
+            'label', 'label', ...
+            'elecshape', 'sphere', ...
+            'elecsize', 6);
+    else
+        % MEG/OPM plotting
+        ft_plot_sens(S.sensors, 'coil', true, 'orientation', true);
+    end
     legendEntries{end+1} = 'Sensors';
 end
+
+% Back sensors
 if isfield(meshes,'back_sensors') && ~isempty(meshes.back_sensors)
-    ft_plot_sens(meshes.back_sensors);
-end
-if isfield(meshes,'front_sensors') && ~isempty(meshes.front_sensors)
-    ft_plot_sens(meshes.front_sensors);
+    if strcmpi(S.senstype,'elec')
+        ft_plot_sens(meshes.back_sensors, ...
+            'elec', true, ...
+            'label', 'label', ...
+            'elecshape', 'sphere', ...
+            'elecsize', 6);
+    else
+        ft_plot_sens(meshes.back_sensors, 'coil', true, 'orientation', true);
+    end
+    legendEntries{end+1} = 'Back sensors';
 end
 
-% === Final plot settings ===
+% Front sensors
+if isfield(meshes,'front_sensors') && ~isempty(meshes.front_sensors)
+    if strcmpi(S.senstype,'elec')
+        ft_plot_sens(meshes.front_sensors, ...
+            'elec', true, ...
+            'label', 'label', ...
+            'elecshape', 'sphere', ...
+            'elecsize', 6);
+    else
+        ft_plot_sens(meshes.front_sensors, 'coil', true, 'orientation', true);
+    end
+    legendEntries{end+1} = 'Front sensors';
+end
+
+
+% Final plot settings
 axis equal; grid on; view(3);
 lighting gouraud; camlight;
 legend(legendEntries, 'Interpreter','none');

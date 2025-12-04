@@ -21,6 +21,9 @@ if ~isfield(S,'frontflag'), S.frontflag = 0; end
 if ~isfield(S,'zlim'), S.zlim = []; end
 if ~isfield(S,'triaxial'), S.triaxial = 1; end
 if ~isfield(S,'coverage'), S.coverage = 0.6; end
+if ~isfield(S,'senstype'), S.senstype = 'grad'; end
+
+S.senstype = lower(S.senstype);
 
 % first load the torso
 fprintf('Loading canonical torso and fiducials...\n')
@@ -278,6 +281,32 @@ grad.tra = speye(numel(grad.label));
 [grad.chantype{1:numel(grad.label)}] = deal('megmag');
 grad.unit = unit;
 grad = ft_datatype_sens(grad, 'amplitude', 'T', 'distance', unit);
+
+% ELECTRODE MODE (MEG → EEG conversion)
+
+if strcmp(S.senstype,'elec')
+    fprintf('Converting triaxial MEG sensors to EEG electrodes...\n');
+
+    % grad.coilpos is [3*nSensors x 3], order: R, T1, T2
+    nTotal = size(grad.coilpos,1);
+    nSens = nTotal / 3;
+
+    elecpos = grad.coilpos(1:2*nSens, :);
+    eleclabel = arrayfun(@(i) sprintf('E%04d', i), 1:(2*nSens),'uni',0)';
+
+    elec = [];
+    elec.elecpos = elecpos;
+    elec.chanpos = elecpos;
+    elec.label   = eleclabel;
+    elec.unit    = grad.unit;
+
+    % FieldTrip formatting
+    elec = ft_datatype_sens(elec, 'amplitude', [], 'distance', elec.unit);
+
+    grad = elec;  
+    fprintf('EEG electrode generation complete! (%d electrodes)\n', nSens);
+end
+
 
 fprintf('Sensor array generation complete! (%d sensors)\n', nSensors);
 end

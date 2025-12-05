@@ -110,7 +110,7 @@ if ~isempty(S.zlim)
     max_z = min(max_z, S.zlim(2));
 end
 
-% ========== FULL BODY MODE ==========
+% FULL BODY MODE
 if S.fullbody
     fprintf('Full body mode: generating 360° coverage...\n');
     
@@ -185,7 +185,7 @@ if S.fullbody
     normals_kept = plane_n;
     
 else
-    % ========== ORIGINAL FRONT/BACK MODE ==========
+    %  ORIGINAL FRONT/BACK MODE
     % choose start plane along Z and ray direction 
     z_range = max_z - min_z;
     offset_dist = max(80, 0.5*z_range);
@@ -461,7 +461,7 @@ if strcmp(S.senstype,'elec')
     nElec = size(grad.elecpos,1);  % number of electrodes
     elec = grad;  % rename for clarity
 
-    % --- Default: common-average reference ---
+    % Default: common-average reference
     % Each channel = electrode_i - mean(all electrodes)
     tra = -ones(nElec) / nElec;
     for k = 1:nElec

@@ -194,7 +194,7 @@ end
 % Step 6: plotting
 figure('Name','Registration check','Color','w'); hold on;
 
-% === Subject surface (grey outline only) ===
+% Subject surface (grey outline only) 
 if isfield(S.subject, 'vertices') && isfield(S.subject, 'faces')
     patch('Vertices', S.subject.vertices, ...
           'Faces', S.subject.faces, ...
@@ -206,7 +206,7 @@ else
 end
 legendEntries = {'Subject'};
 
-% === Simulation meshes ===
+% Simulation meshes
 meshNames = fieldnames(meshes);
 sensorFields = {'front_sensors','back_sensors'};
 
@@ -311,7 +311,19 @@ if isfield(meshes,'front_sensors') && ~isempty(meshes.front_sensors)
     legendEntries{end+1} = 'Front sensors';
 end
 
-
+% fullbody sensors
+if isfield(meshes,'fullbody_sensors') && ~isempty(meshes.fullbody_sensors)
+    if strcmpi(S.senstype,'elec')
+        ft_plot_sens(meshes.fullbody_sensors, ...
+            'elec', true, ...
+            'label', 'label', ...
+            'elecshape', 'sphere', ...
+            'elecsize', 6);
+    else
+        ft_plot_sens(meshes.fullbody_sensors, 'coil', true, 'orientation', true);
+    end
+    legendEntries{end+1} = 'Fullbody Sensors';
+end
 % Final plot settings
 axis equal; grid on; view(3);
 lighting gouraud; camlight;

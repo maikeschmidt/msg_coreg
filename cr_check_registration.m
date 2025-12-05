@@ -136,7 +136,7 @@ torso = meshes.torso;
 
 % Step 4b: optional sensor generation
 if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar(S.sensor_gen) && strcmpi(S.sensor_gen,'true'))
-    % Generate back sensors
+    % Setup common parameters
     S_v3 = [];
     S_v3.subject = S.subject;
     S_v3.T = T;
@@ -144,21 +144,34 @@ if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar
     S_v3.depth      = S.depth;
     S_v3.margin     = S.margin;
     S_v3.coverage = S.coverage;
-    S_v3.frontflag  = 1;   % back sensors (flag=1)
     S_v3.triaxial   = 1;
     S_v3.torsotype = S.torso_mode;
     S_v3.senstype   = S.senstype;
-    back_sensors = cr_generate_sensor_array_v4(S_v3);
-
-    % Generate front sensors
-    S_v3.frontflag = 0; % front sensors (flag=0)
-    front_sensors = cr_generate_sensor_array_v4(S_v3);
-
-    % Add to output
-    meshes.back_sensors  = back_sensors;
-    meshes.front_sensors = front_sensors;
+    
+    % Check if fullbody mode requested
+    if isfield(S,'fullbody') && S.fullbody
+        % Generate single fullbody sensor array
+        S_v3.fullbody = 1;
+        fullbody_sensors = cr_generate_sensor_array_v4(S_v3);
+        meshes.fullbody_sensors = fullbody_sensors;
+        
+    else
+        % Generate separate back and front sensors (original behavior)
+        S_v3.fullbody = 0;
+        
+        % Generate back sensors
+        S_v3.frontflag = 0;   % back sensors
+        back_sensors = cr_generate_sensor_array_v4(S_v3);
+        
+        % Generate front sensors
+        S_v3.frontflag = 1;   % front sensors
+        front_sensors = cr_generate_sensor_array_v4(S_v3);
+        
+        % Add to output
+        meshes.back_sensors  = back_sensors;
+        meshes.front_sensors = front_sensors;
+    end
 end
-
 
 % Step 5: brain registration
 if isfield(S, 'brain') && S.brain

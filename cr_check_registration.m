@@ -194,7 +194,7 @@ end
 % Step 6: plotting
 figure('Name','Registration check','Color','w'); hold on;
 
-% Subject surface (grey outline only) 
+% === Subject surface (grey outline only) ===
 if isfield(S.subject, 'vertices') && isfield(S.subject, 'faces')
     patch('Vertices', S.subject.vertices, ...
           'Faces', S.subject.faces, ...
@@ -206,9 +206,9 @@ else
 end
 legendEntries = {'Subject'};
 
-% Simulation meshes
+% === Simulation meshes ===
 meshNames = fieldnames(meshes);
-sensorFields = {'front_sensors','back_sensors'};
+sensorFields = {'front_sensors','back_sensors','fullbody_sensors'};
 
 for i = 1:numel(meshNames)
     if ismember(meshNames{i}, sensorFields)
@@ -283,35 +283,7 @@ if ~isempty(S.sensors)
     legendEntries{end+1} = 'Sensors';
 end
 
-% Back sensors
-if isfield(meshes,'back_sensors') && ~isempty(meshes.back_sensors)
-    if strcmpi(S.senstype,'elec')
-        ft_plot_sens(meshes.back_sensors, ...
-            'elec', true, ...
-            'label', 'label', ...
-            'elecshape', 'sphere', ...
-            'elecsize', 6);
-    else
-        ft_plot_sens(meshes.back_sensors, 'coil', true, 'orientation', true);
-    end
-    legendEntries{end+1} = 'Back sensors';
-end
-
-% Front sensors
-if isfield(meshes,'front_sensors') && ~isempty(meshes.front_sensors)
-    if strcmpi(S.senstype,'elec')
-        ft_plot_sens(meshes.front_sensors, ...
-            'elec', true, ...
-            'label', 'label', ...
-            'elecshape', 'sphere', ...
-            'elecsize', 6);
-    else
-        ft_plot_sens(meshes.front_sensors, 'coil', true, 'orientation', true);
-    end
-    legendEntries{end+1} = 'Front sensors';
-end
-
-% fullbody sensors
+% Fullbody sensors (takes precedence if present)
 if isfield(meshes,'fullbody_sensors') && ~isempty(meshes.fullbody_sensors)
     if strcmpi(S.senstype,'elec')
         ft_plot_sens(meshes.fullbody_sensors, ...
@@ -322,8 +294,38 @@ if isfield(meshes,'fullbody_sensors') && ~isempty(meshes.fullbody_sensors)
     else
         ft_plot_sens(meshes.fullbody_sensors, 'coil', true, 'orientation', true);
     end
-    legendEntries{end+1} = 'Fullbody Sensors';
+    legendEntries{end+1} = 'Fullbody sensors';
+    
+else
+    % Back sensors (only if not fullbody mode)
+    if isfield(meshes,'back_sensors') && ~isempty(meshes.back_sensors)
+        if strcmpi(S.senstype,'elec')
+            ft_plot_sens(meshes.back_sensors, ...
+                'elec', true, ...
+                'label', 'label', ...
+                'elecshape', 'sphere', ...
+                'elecsize', 6);
+        else
+            ft_plot_sens(meshes.back_sensors, 'coil', true, 'orientation', true);
+        end
+        legendEntries{end+1} = 'Back sensors';
+    end
+
+    % Front sensors (only if not fullbody mode)
+    if isfield(meshes,'front_sensors') && ~isempty(meshes.front_sensors)
+        if strcmpi(S.senstype,'elec')
+            ft_plot_sens(meshes.front_sensors, ...
+                'elec', true, ...
+                'label', 'label', ...
+                'elecshape', 'sphere', ...
+                'elecsize', 6);
+        else
+            ft_plot_sens(meshes.front_sensors, 'coil', true, 'orientation', true);
+        end
+        legendEntries{end+1} = 'Front sensors';
+    end
 end
+
 % Final plot settings
 axis equal; grid on; view(3);
 lighting gouraud; camlight;

@@ -28,6 +28,7 @@ S.sensor_gen = true; %generate sensors (front and back separatly)
 S.resolution = 30; % spacing between sensors
 S.depth = -10; %sensor offset from mesh surface
 S.coverage = [0.25 0.25 0.15 0.15]; %fraction of axis to NOT cover in sensors; top, bottom, left, right (a single number such as 0.6 will cover the top 60% of the mesh)
+S.fullbody = 1; %flag for full 360 sensor coverage, defualt is front and back only
 S.senstype = 'elec'; %default is grad (msg sensors) if senstype is not specified
 S.spine_mode = 'full'; %which spine model to load (full or cervical)
 S.torso_mode = 'anatomical'; %perfect mri co-reg or manual fid selection (anatomical or canonical)

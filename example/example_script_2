@@ -1,6 +1,7 @@
 %% Example script to create a series of meshes which can be used for simulations and forward modelling
 
 %% Load and process the optical scan - this is the optical scan to which you want to register the simulation meshes to
+cr_add_hbf; %add the needed paths
 
 optical = ft_read_headshape('surface.stl', 'unit', 'mm');
 p = struct();

@@ -335,6 +335,6 @@ title(sprintf('Registration check (%s torso, %s spine, %s bone)', ...
 
 output_meshes = meshes;
 output_meshes.transform = T;
-% output_meshes.brains_transform_mat = temp_brain.transform_matrix;
+output_meshes.brains_transform_mat = temp_brain.transform_matrix;
 end
 

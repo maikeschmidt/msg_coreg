@@ -1,0 +1,63 @@
+clearvars
+close all
+clc
+
+cr_add_functions;
+
+%% Load and process the optical scan
+optical = stlread('surface.stl');
+p = reducepatch(optical, 0.01); % Reduce complexity of the mesh
+subject.pos = p.vertices;
+subject.tri = p.faces;
+
+% Prepare mesh structure
+mesh = struct();
+mesh.vertices = subject.pos;
+mesh.faces = subject.tri;
+mesh.unit = 'mm'; % Define unit explicitly - make sure it matches the grad structure!
+
+%% Load all simulation meshes + Create Sensor array
+
+cd('D:\Simulations\Paper_1\but_actualy\geometries')
+
+S = []; 
+S.subject = mesh;
+S.sensor_gen = true; %generate sensors (front and back separatly)
+S.outer_mesh = 'torso';
+S.resolution = 30; % spacing between sensors
+S.depth = -10; %sensor offset from mesh surface
+S.coverage = [0.3 0.45 0.15 0.15]; %fraction of axis to NOT cover in sensors; top, bottom, left, right (a single number such as 0.6 will cover the top 60% of the mesh)
+% S.fullbody = 0; %full body sensor coverage
+% S.senstype = 'elec'; %default is grad (msg sensors) if senstype is not specified
+S.spine_mode = 'full'; %which spine model to load (full or cervical)
+S.torso_mode = 'anatomical'; %perfect mri co-reg or manual fid selection (anatomical or canonical)
+S.bone_mode = 'cont'; %type of bone model to load (cont, homo, inhomo, realistic)
+% S.brain = true;
+all_meshes = cr_check_registration(S);
+
+
+mesh_torso = all_meshes.torso;
+mesh_spine = all_meshes.spine;
+mesh_bone = all_meshes.bone;
+mesh_heart = all_meshes.heart;
+mesh_lungs = all_meshes.lungs;
+% mesh_brain = all_meshes.brain;
+% mesh_skull = all_meshes.oskull;
+
+% sensors = all_meshes.fullbody_sensors;
+sensors_back = all_meshes.front_sensors;
+sensors_front = all_meshes.back_sensors;
+
+%% create spine sources
+y_min = min(mesh_spine.vertices(:,2));
+y_max = max(mesh_spine.vertices(:,2));
+
+S = [];
+S.spine = mesh_spine;
+S.resolution = 5; 
+S.ylim = [y_min y_max];
+S.unit = 'mm';
+spine_sources = cr_generate_spine_center(S);
+
+%% this is everything we need for BEM and FEM forward modelling!
+

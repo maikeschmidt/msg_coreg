@@ -46,7 +46,7 @@ function meshes = load_and_transform_meshes(fileNames, transformMatrix, applyTra
 
     for i = 1:numel(fileNames)
         meshName = fileNames{i};
-        stlFile = fullfile(coreg_path, [meshName, '.stl']);
+        stlFile = fullfile(coreg_path, 'meshes', [meshName, '.stl']);
         mesh = [];
 
         % Load STL

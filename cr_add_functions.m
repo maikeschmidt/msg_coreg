@@ -1,7 +1,5 @@
 function cr_add_functions
 % Add Helsinki BEM library and ensure HBF helper functions are accessible
-% Add fieldtrp and private functions to path that are needed to run these
-% simulations
 
 % Paths
 hbf_path = fullfile(coreg_path, 'hbf_lc_p');
@@ -13,21 +11,50 @@ if isempty(which('hbf_SetPaths'))
 end
 hbf_SetPaths;
 
+% Patch FieldTrip HBF detection (case-sensitivity fix)
+% ft_hastoolbox lower()s function names, but HBF uses uppercase filenames
+% We create lowercase wrappers that forward to the uppercase originals
+
+wrapper_dir = fullfile(coreg_path, 'hbf_ft_wrappers');
+if ~exist(wrapper_dir,'dir'), mkdir(wrapper_dir); end
+
+% Functions FieldTrip checks for HBF
+hbf_ft_deps = {
+    'hbf_tm_phi_lc',        'HBF_TM_PHI_LC'
+    'hbf_lfm_b_lc',         'HBF_LFM_B_LC'
+    'hbf_bemoperatorsb_linear', 'HBF_BEMOperatorsB_Linear'
+};
+
+for i = 1:size(hbf_ft_deps,1)
+    lower_name = hbf_ft_deps{i,1};
+    upper_name = hbf_ft_deps{i,2};
+
+    % Only create wrapper if lowercase version is missing
+    if isempty(which(lower_name)) && ~isempty(which(upper_name))
+        wrapper_file = fullfile(wrapper_dir, [lower_name '.m']);
+
+        fid = fopen(wrapper_file,'w');
+        fprintf(fid, ...
+            'function varargout = %s(varargin)\n' + ...
+            '%% Auto-generated FieldTrip compatibility wrapper\n' + ...
+            '[varargout{1:nargout}] = %s(varargin{:});\n' + ...
+            'end\n', ...
+            lower_name, upper_name);
+        fclose(fid);
+
+        fprintf('Created HBF wrapper: %s -> %s\n', lower_name, upper_name);
+    end
+end
+
+addpath(wrapper_dir);
+
+
 % Destination for private HBF/FT functions (normal folder, not private)
 dir_out = fullfile(coreg_path, 'hbf_private');
 if ~exist(dir_out,'dir'), mkdir(dir_out); end
 
 % Functions to copy
-fnames = { ...
-    'hbf_LFM_B_LC_xyz', ...
-    'hbf_Phiinf_xyz', ...
-    'hbf_Binf_xyz', ...
-    'bmesh2bnd', ...
-    'fixbalance', ...
-    'filetype_check_uri' ...
-    'filetype_check_header',...
-};
-
+fnames = {'hbf_LFM_B_LC_xyz', 'hbf_Phiinf_xyz', 'hbf_Binf_xyz', 'bmesh2bnd', 'fixbalance'};
 exts   = {'m','p'};
 
 % HBF private folder
@@ -69,7 +96,7 @@ end
 % Finally, add the new folder to MATLAB path
 addpath(dir_out);
 
-fprintf('helper functions copied to %s and added to path.\n', dir_out);
+fprintf('HBF helper functions copied to %s and added to path.\n', dir_out);
 
 end
 

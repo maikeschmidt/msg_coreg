@@ -24,18 +24,19 @@ if ~isfield(S,'zlim'), S.zlim = []; end
 if ~isfield(S,'triaxial'), S.triaxial = 1; end
 if ~isfield(S,'coverage'), S.coverage = 0.6; end
 if ~isfield(S,'senstype'), S.senstype = 'grad'; end
+if ~isfield(S, 'outer_mesh'), S.outer_mesh = 'torso'; end
 
 S.senstype = lower(S.senstype);
 
 % first load the torso
-fprintf('Loading canonical torso and fiducials...\n')
+fprintf('Loading torso and fiducials...\n')
 
 if ~isfield(S,'torsotype'), S.torsotype = 'anatomical'; end
 switch lower(S.torsotype)
     case 'anatomical'
-        torso_file = fullfile(coreg_path,'mri_torso.stl');
+        torso_file = fullfile(coreg_path, 'meshes','mri_torso.stl');
     case 'canonical'
-        torso_file = fullfile(coreg_path,'canonical_torso.stl');
+        torso_file = fullfile(coreg_path, 'meshes' ,'canonical_torso.stl');
     otherwise
         error('S.torsotype must be ''anatomical'' or ''canonical''');
 end
@@ -349,17 +350,22 @@ unit = 'mm';
 
 % Option A: keep fixed XYZ axes (original front/back mode)
 if S.triaxial && ~S.fullbody
-    grad.coilpos = repmat(grid_all, 3, 1);
-    grad.coilori = [repmat([1 0 0], nSensors, 1);
-                    repmat([0 1 0], nSensors, 1);
-                    repmat([0 0 1], nSensors, 1)];
-    grad.label = cell(3*nSensors,1);
-    for ii = 1:nSensors
-        idx = (ii-1)*3 + (1:3);
-        grad.label{idx(1)} = sprintf('mag-%04d-R',ii);
-        grad.label{idx(2)} = sprintf('mag-%04d-T1',ii);
-        grad.label{idx(3)} = sprintf('mag-%04d-T2',ii);
+    if S.triaxial
+        grad.coilpos = repmat(grid_all, 3, 1);
+        grad.coilori = [repmat([1 0 0], nSensors, 1);
+                        repmat([0 1 0], nSensors, 1);
+                        repmat([0 0 1], nSensors, 1)];
+        grad.label = cell(3*nSensors,1);
+        grad.label = cell(3*nSensors,1);
+
+        for ii = 1:nSensors
+            grad.label{ii}              = sprintf('mag-%04d-T1', ii);
+            grad.label{ii + nSensors}   = sprintf('mag-%04d-T2', ii);
+            grad.label{ii + 2*nSensors} = sprintf('mag-%04d-R',  ii);
+        end
+        
     end
+
 elseif S.triaxial && S.fullbody
     % Full body mode: use surface normals for radial orientation
     grad.coilpos = repmat(grid_all, 3, 1);
@@ -398,30 +404,29 @@ else
     grad.label = arrayfun(@(ii) sprintf('mag-%04d-R',ii), 1:nSensors, 'uni', 0)';
 end
 
-% If you'd rather have radial = surface normal and tangents from null,
+% If you'd rather have radial sensors aligned with surface normals,
 % replace the coilori block above with the code below :
 %{
-if S.triaxial
-    grad.coilpos = repmat(grid_all, 3, 1);
-    grad.coilori = zeros(3*nSensors,3);
-    grad.label = cell(3*nSensors,1);
-    for i = 1:nSensors
-        nrm = normals_kept(i,:)';
-        if norm(nrm) < eps
-            nrm = [0 1 0]';
-        else
-            nrm = nrm / norm(nrm);
-        end
-        T = null(nrm'); tang1 = T(:,1)'; tang2 = T(:,2)';
-        idx = (i-1)*3 + (1:3);
-        grad.coilori(idx(1),:) = nrm';
-        grad.coilori(idx(2),:) = tang1;
-        grad.coilori(idx(3),:) = tang2;
-        grad.label{idx(1)} = sprintf('mag-%04d-R',i);
-        grad.label{idx(2)} = sprintf('mag-%04d-T1',i);
-        grad.label{idx(3)} = sprintf('mag-%04d-T2',i);
-    end
-end
+
+ grad.coilpos = repmat(grid_all, 3, 1);
+        grad.coilori = zeros(3*nSensors,3);
+        grad.label = cell(3*nSensors,1);
+        for i = 1:nSensors
+            nrm = normals_kept(i,:)';
+            if norm(nrm) < eps
+                nrm = [0 1 0]';
+            else
+                nrm = nrm / norm(nrm);
+            end
+            T = null(nrm'); tang1 = T(:,1)'; tang2 = T(:,2)';
+            idx = (i-1)*3 + (1:3);
+            grad.coilori(idx(1),:) = nrm';
+            grad.coilori(idx(2),:) = tang1;
+            grad.coilori(idx(3),:) = tang2;
+            grad.label{idx(1)} = sprintf('mag-%04d-R',i);
+            grad.label{idx(2)} = sprintf('mag-%04d-T1',i);
+            grad.label{idx(3)} = sprintf('mag-%04d-T2',i);
+
 %}
 
 grad.tra = speye(numel(grad.label));

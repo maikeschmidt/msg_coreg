@@ -11,6 +11,8 @@ if ~isfield(S,'resolution'); S.resolution = 30; end
 if ~isfield(S,'depth');      S.depth = -10; end
 if ~isfield(S,'margin');     S.margin = 50; end
 if ~isfield(S, 'coverage'); S.coverage = 0.6; end
+if ~isfield(S, 'outer_mesh'); S.outer_mesh = 'torso'; end
+
 % MEG/EEG mode ('grad' = OPM/MEG; 'elec' = EEG)
 if ~isfield(S, 'senstype')
     S.senstype = 'grad';   % default for MSG toolbox
@@ -133,6 +135,10 @@ if isfield(meshes, spineType)
     end
 end
 torso = meshes.torso;
+orient = hbf_CheckTriangleOrientation(torso.vertices, torso.faces);
+        if orient == 2
+            torso.faces = torso.faces(:, [1 3 2]);
+        end
 
 % Step 4b: optional sensor generation
 if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar(S.sensor_gen) && strcmpi(S.sensor_gen,'true'))
@@ -147,6 +153,7 @@ if isfield(S,'sensor_gen') && (islogical(S.sensor_gen) && S.sensor_gen || ischar
     S_v3.triaxial   = 1;
     S_v3.torsotype = S.torso_mode;
     S_v3.senstype   = S.senstype;
+    S_v3.outer_mesh = S.outer_mesh;
     
     % Check if fullbody mode requested
     if isfield(S,'fullbody') && S.fullbody
@@ -335,6 +342,6 @@ title(sprintf('Registration check (%s torso, %s spine, %s bone)', ...
 
 output_meshes = meshes;
 output_meshes.transform = T;
-output_meshes.brains_transform_mat = temp_brain.transform_matrix;
+% output_meshes.brains_transform_mat = temp_brain.transform_matrix;
 end
 

@@ -1,5 +1,54 @@
 # msg_coreg Toolbox
 
+## Directory Structure
+
+```
+msg_coreg/
+├── coreg_path.m
+├── cr_add_functions.m
+├── cr_check_registration.m
+├── cr_generate_sensor_array_v4.m
+├── cr_generate_spine_center.m
+├── cr_get_fids.m
+├── cr_load_meshes.asv
+├── cr_load_meshes.m
+├── cr_register_brain.m
+├── cr_register_torso.m
+├── determine_body_scan_units.mlx
+├── example/
+│   ├── example_script_1.m
+│   └── example_script_2
+├── meshes/
+│   ├── back_muscle_temp.stl
+│   ├── canonical_cervical_cont.stl
+│   ├── canonical_cervical_homo.stl
+│   ├── canonical_cervical_inhomo.stl
+│   ├── canonical_full_cont.stl
+│   ├── canonical_full_homo.stl
+│   ├── canonical_full_inhomo.stl
+│   ├── canonical_heart.stl
+│   ├── canonical_lungs.stl
+│   ├── canonical_torso.stl
+│   ├── cervical_spine.stl
+│   ├── expl
+│   ├── heart.stl
+│   ├── mri_cervical_cont.stl
+│   ├── mri_cervical_homo.stl
+│   ├── mri_cervical_inhomo.stl
+│   ├── mri_cervical_spine.stl
+│   ├── mri_full_cont.stl
+│   ├── mri_full_homo.stl
+│   ├── mri_full_inhomo.stl
+│   ├── mri_full_spine.stl
+│   ├── mri_lungs.stl
+│   ├── mri_torso.stl
+│   ├── realistic_cervical_bone.stl
+│   ├── realistic_full_bone.stl
+│   ├── spine.stl
+│   └── vagus_nerve_temp.stl
+└── README.md
+```
+
 The **msg_coreg** toolbox provides tools to generate anatomically informed mesh models for **spinal cord simulations** and **concurrent cortico–spinal interaction studies**.  
 It supports both **canonical** and **anatomical** modelling approaches and is designed to integrate with MEG/OPM, EEG, and surface electrode simulations.
 

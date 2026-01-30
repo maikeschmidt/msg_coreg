@@ -2,12 +2,9 @@ clearvars
 close all
 clc
 
-cd('D:\');
-Metadata;
 cr_add_functions;
 
 %% Load and process the optical scan
-cd('D:\OPM\scannercast')
 optical = stlread('surface.stl');
 p = reducepatch(optical, 0.01); % Reduce complexity of the mesh
 subject.pos = p.vertices;

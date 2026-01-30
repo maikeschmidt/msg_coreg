@@ -1,78 +1,60 @@
 %% Example script to co-register between OPM sensor positions, Optical Scan, and Simulation mesh models
-% the only thing to make sure that is in path is spm - otherwise i *think* this should have it all
-
-% This is early days, so there may be some snags in the pipeline - let me know!!!
-
-% First, need to register the halo results to the optical scan
-
-halo = []; % Placeholder for halo file import
-marker_opms = []; % Identify which OPMs were used as the markers
-m_opm_pos = []; % Extract the positions of these sensors
+cr_add_functions;
 
 % Read and preprocess the optical scan
-optical = ft_read_headshape('D:\Optical Scan\17_10_24\OP00180_scan_spineneck.stl', 'unit', 'm');
-p = struct();
-p.vertices = optical.pos;
-p.faces = optical.tri;
-p2 = reducepatch(p, 0.05); % Reduce complexity of the mesh
-subject.pos = p2.vertices;
-subject.tri = p2.faces;
 
-% Prepare mesh structure
 mesh = struct();
-mesh.vertices = subject.pos;
-mesh.faces = subject.tri;
-mesh.unit = 'm'; % Define unit explicitly
+mesh.vertices = ;
+mesh.faces = ;
+mesh.unit = 'mm'; % Define unit explicitly - make sure it matches the grad structure!
 
-% Select the fiducials where the OPMs were placed
-fids_select_1 = spm_mesh_select(mesh, 3); % will need to be in the same order that the opm positions are given
-opm_mesh_fids = fids_select_1'; 
+% call in the experimental opm array
+sub = '';
+posfile_back = '.tsv';
+savepath = fullfile('D:\OPM\', ['sub-OP', sub(3:end)], 'nervesim');
+cd(savepath)
+ 
+D = {}; 
+filetemplate = sprintf('nervesim-right-run_002_array1.lvm');
+S = struct(); 
+S.data = filetemplate;
+S.positions = posfile_back; 
+D = spm_opm_create(S); 
+ 
+exp_sensors = sensors(D, 'MEG');
 
-% Procrustes alignment (scaling, reflection, translation)
-[d, Z, transform] = procrustes(m_opm_pos, opm_mesh_fids, 'Scaling', true, 'Reflection', true);
+%% Load all simulation meshes + Create Sensor array
 
-% Apply initial Procrustes transformation
-initial_transformed_points = mesh.vertices * transform.T + transform.c(1, :);
-initial_transformed_fids = opm_mesh_fids * transform.T + transform.c(1, :);
-
-% Implement ICP - Fiducials as Point Clouds
-pc_fids_1 = pointCloud(initial_transformed_fids);
-pc_matched_fids_1 = pointCloud(m_opm_pos);
-
-% Apply ICP to further refine the transformation
-[tform_fiducials, rmse] = pcregrigid(pc_fids_1, pc_matched_fids_1); % RMSE gives alignment error
-
-% Apply the final ICP transformation to the fiducials and the full mesh
-transformed_fids1 = transformPointsForward(tform_fiducials, pc_fids_1.Location);
-transformed_vertices1 = transformPointsForward(tform_fiducials, pointCloud(initial_transformed_points).Location);
-
-opm_optical = struct();
-opm_optical.vertices = transformed_vertices1;
-opm_optical.faces = mesh.faces; % Faces remain unchanged
-opm_optical.unit = 'm'; 
-% Now the optical scan fiducials should be aligned with the OPM sensor positions
-%%
-% now we need to register the simulation meshes to the optical scan which
-% is in opm sensor space
-
-sim_fids_select = spm_mesh_select(opm_optical);
-sim_fids = sim_fids_select';
-
-S = [];
-S.subject = opm_optical; 
-S.fiducials = sim_fids;
-S.plot = 'true';
-
-T = cr_register_torso(S);
+cd('D:\Simulations\Paper_1\but_actualy\geometries')
 
 S = []; 
-S.subject = opm_optical;
-S.T = T;
-S.spine_mode = 'default';  % can be 'default', 'cervical', 'custom
-% for 'custom' mode:
-% S.spine = user_spine_mesh;
-% S.vertebrae = user_bone_mesh;
-
-S.sensors = ; %can define the sensors to plot here
-
+S.subject = mesh;
+S.sensors = exp_sensors;
+S.spine_mode = 'full'; %which spine model to load (full or cervical)
+S.torso_mode = 'canonical';
+S.bone_mode = 'cont'; %type of bone model to load (cont, homo, inhomo, realistic)
+% S.brain = true;
 all_meshes = cr_check_registration(S);
+
+mesh_torso = all_meshes.torso;
+mesh_spine = all_meshes.spine;
+mesh_bone = all_meshes.bone;
+mesh_heart = all_meshes.heart;
+mesh_lungs = all_meshes.lungs;
+% mesh_brain = all_meshes.brain;
+% mesh_skull = all_meshes.oskull;
+
+%% create spine sources
+y_min = min(mesh_spine.vertices(:,2));
+y_max = max(mesh_spine.vertices(:,2));
+
+S = [];
+S.spine = mesh_spine;
+S.resolution = 5; 
+S.ylim = [y_min y_max];
+S.unit = 'mm';
+spine_sources = cr_generate_spine_center(S);
+
+%% this is everything we need for BEM and FEM forward modelling!
+
+

@@ -176,6 +176,44 @@ These outputs can then be passed to your BEM/FEM forward modelling pipeline.
 
 ---
 
+## Example Scripts
+
+The toolbox includes example scripts demonstrating common and recommended workflows.
+
+### 1. Registering Simulation Meshes into Experimental Sensor Space  
+**(Using an existing sensor array)**
+
+This example demonstrates how to:
+
+- Register canonical or anatomical simulation meshes into experimental sensor space
+- Import an existing experimental sensor array (e.g. MEG/OPM or EEG)
+- Apply the appropriate rigid-body transformation between mesh space and sensor space
+
+This workflow is recommended when:
+- You already have an experimentally defined sensor layout
+- You want to run simulations directly in the same coordinate system as recorded data
+
+---
+
+### 2. Creating Anatomically Accurate Meshes and Generating a Sensor Array  
+**(As used in the paper)**
+
+This example demonstrates how to:
+
+- Create the **anatomical model** using subject-specific geometry
+- Use the **realistic MRI-segmented bone model** described in the paper
+- Register meshes using the scanner-cast–based optical surface (`surface.stl`)
+- Generate a sensor array matching the configuration shown in the paper
+
+This workflow reproduces the **anatomically accurate simulation setup** used in the publication and is recommended when:
+
+- Accurate spinal cord positioning within the torso is required
+- Investigating the effect of realistic bone geometry on forward modelling
+- Simulating concurrent cortico–spinal interactions with matched sensor geometry
+
+---
+
+
 ## Citation
 
 If you use this toolbox in your work, please cite:

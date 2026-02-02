@@ -213,7 +213,7 @@ This step is **optional** and only required if you wish to simulate distributed 
 For boundary element forward modelling (as described in:
 
 > *[Insert forward modelling paper citation here]*  
-> *[Insert related GitHub repository here]*
+> *https://github.com/maikeschmidt/msg_fwd*
 
 you will need to export:
 

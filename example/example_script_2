@@ -23,7 +23,6 @@ cd('D:\Simulations\Paper_1\but_actualy\geometries')
 S = []; 
 S.subject = mesh;
 S.sensor_gen = true; %generate sensors (front and back separatly)
-S.outer_mesh = 'torso';
 S.resolution = 30; % spacing between sensors
 S.depth = -10; %sensor offset from mesh surface
 S.coverage = [0.25 0 0.15 0.15]; %fraction of axis to NOT cover in sensors; top, bottom, left, right (a single number such as 0.6 will cover the top 60% of the mesh)

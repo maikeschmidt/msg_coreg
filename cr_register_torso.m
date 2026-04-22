@@ -8,7 +8,7 @@ if ~isfield(S,'dist'), S.dist = 0.02; end
 if ~isfield(S,'plot'), S.plot = false; end
 
 % Load the canonical torso and generate fiducials
-torso_file = fullfile(coreg_path,'canonical_torso.stl'); % Units: m
+torso_file = fullfile(coreg_path,'meshes\canonical_torso.stl'); % Units: m
 
 stl_data = stlread(torso_file);
 torso = struct();

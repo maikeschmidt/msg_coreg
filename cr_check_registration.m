@@ -1,3 +1,58 @@
+% cr_check_registration - Check and visualise registration of simulation meshes
+%
+% Loads and aligns anatomical/canonical meshes (torso, heart, lungs, spine,
+% bone) to a subject surface, with optional sensor array generation and
+% brain registration. Produces a colour-coded 3D registration plot.
+%
+% USAGE:
+%   output_meshes = cr_check_registration(S)
+%
+% INPUT:
+%   S             - Structure with the following fields:
+%
+%   Required:
+%     S.subject       - Subject surface mesh (struct with .vertices, .faces)
+%     S.torso_mode    - 'canonical' or 'anatomical'
+%
+%   Optional:
+%     S.sensors       - Sensor array struct (default: [])
+%     S.senstype      - 'grad' for OPM/MEG (default) | 'elec' for EEG
+%     S.spine_mode    - 'full' (default) | 'cervical'
+%     S.bone_mode     - 'default' (default) | 'realistic' | 'inhomo' |
+%                       'homo' | 'cont'
+%     S.sensor_gen    - true/false — generate sensor array (default: false)
+%     S.resolution    - Sensor grid resolution in mm (default: 30)
+%     S.depth         - Sensor depth offset in mm (default: -10)
+%     S.margin        - Sensor margin in mm (default: 50)
+%     S.coverage      - Fractional surface coverage (default: 0.6)
+%     S.outer_mesh    - Mesh to place sensors on (default: 'torso')
+%     S.fullbody      - true/false — generate fullbody sensor array
+%     S.brain         - true/false — run brain registration
+%
+% OUTPUT:
+%   output_meshes - Struct containing all loaded and registered meshes,
+%                   plus the transform matrix (output_meshes.transform)
+%
+% EXAMPLE:
+%   S.subject    = my_subject_mesh;
+%   S.torso_mode = 'canonical';
+%   S.spine_mode = 'full';
+%   S.bone_mode  = 'homo';
+%   out = cr_check_registration(S);
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
+
 function output_meshes = cr_check_registration(S)
 
 if ~isfield(S, 'subject'); error('Please provide a subject mesh'); end

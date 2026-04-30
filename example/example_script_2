@@ -1,62 +1,114 @@
+% example_script_2 - Build anatomical meshes and generate a sensor array
+%
+% Demonstrates the full anatomical modelling pipeline using subject-specific
+% geometry, a realistic MRI-segmented bone model, and a scanner-cast optical
+% surface scan. Generates separate front and back OPM sensor arrays aligned
+% to the subject surface. This workflow reproduces the anatomically accurate
+% simulation setup used in the associated publication.
+%
+% WORKFLOW:
+%   1. Load and downsample the scanner-cast optical surface scan
+%   2. Run cr_check_registration() to load anatomical meshes and generate
+%      front and back sensor arrays
+%   3. Generate a spinal cord centreline source model
+%
+% USE THIS SCRIPT WHEN:
+%   - Accurate spinal cord positioning within the torso is required
+%   - Investigating the effect of realistic bone geometry on forward modelling
+%   - Simulating concurrent cortico-spinal interactions
+%   - Reproducing the sensor geometry from the associated paper
+%
+% REQUIREMENTS:
+%   - SPM (developmental version recommended)
+%   - FieldTrip
+%   - Helsinki BEM Framework (hbf_lc_p subfolder)
+%   - Scanner-cast optical surface scan (surface.stl, provided in meshes/)
+%
+% OUTPUTS (workspace variables):
+%   all_meshes    - Struct of all registered simulation meshes
+%   mesh_torso    - Torso surface mesh
+%   mesh_spine    - Spine mesh
+%   mesh_bone     - Bone mesh (realistic MRI-segmented)
+%   mesh_heart    - Heart mesh
+%   mesh_lungs    - Lung mesh
+%   sensors_back  - Generated back OPM sensor array
+%   sensors_front - Generated front OPM sensor array
+%   spine_sources - Spinal cord centreline source model
+%
+% SEE ALSO:
+%   cr_check_registration, cr_generate_sensor_array_v4,
+%   cr_generate_spine_center, cr_add_functions
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
+
+
+%% Initialise
 clearvars
 close all
 clc
-
 cr_add_functions;
 
-%% Load and process the optical scan
-optical = stlread('surface.stl');
-p = reducepatch(optical, 0.01); % Reduce complexity of the mesh
-subject.pos = p.vertices;
-subject.tri = p.faces;
+%% Load and process the scanner-cast optical surface scan
+optical        = stlread('surface.stl');
+p              = reducepatch(optical, 0.01);  % reduce mesh complexity
 
-% Prepare mesh structure
-mesh = struct();
-mesh.vertices = subject.pos;
-mesh.faces = subject.tri;
-mesh.unit = 'mm'; % Define unit explicitly - make sure it matches the grad structure!
+mesh           = struct();
+mesh.vertices  = p.vertices;
+mesh.faces     = p.faces;
+mesh.unit      = 'mm';   % must match the grad structure units
 
-%% Load all simulation meshes + Create Sensor array
+%% Load all simulation meshes and generate sensor arrays
+S             = [];
+S.subject     = mesh;
+S.sensor_gen  = true;              % generate front and back sensor arrays
+S.resolution  = 30;                % sensor spacing in mm
+S.depth       = -10;               % sensor offset from mesh surface in mm
+S.coverage    = [0.25 0 0.15 0.15]; % fraction to exclude: [top bottom left right]
+% S.fullbody  = 0;                 % uncomment for full 360° sensor coverage
+% S.senstype  = 'elec';            % uncomment for surface electrodes (default: 'grad')
+S.spine_mode  = 'full';            % 'full' or 'cervical'
+S.torso_mode  = 'anatomical';      % 'canonical' or 'anatomical'
+S.bone_mode   = 'realistic';       % 'cont', 'homo', 'inhomo', or 'realistic'
+% S.brain     = true;              % uncomment to include brain registration
 
-cd('D:\Simulations\Paper_1\but_actualy\geometries')
-
-S = []; 
-S.subject = mesh;
-S.sensor_gen = true; %generate sensors (front and back separatly)
-S.resolution = 30; % spacing between sensors
-S.depth = -10; %sensor offset from mesh surface
-S.coverage = [0.25 0 0.15 0.15]; %fraction of axis to NOT cover in sensors; top, bottom, left, right (a single number such as 0.6 will cover the top 60% of the mesh)
-% S.fullbody = 0; %full body sensor coverage
-% S.senstype = 'elec'; %default is grad (msg sensors) if senstype is not specified
-S.spine_mode = 'full'; %which spine model to load (full or cervical)
-S.torso_mode = 'anatomical'; %perfect mri co-reg or manual fid selection (anatomical or canonical)
-S.bone_mode = 'realistic'; %type of bone model to load (cont, homo, inhomo, realistic)
-% S.brain = true;
-all_meshes = cr_check_registration(S);
-
-
-mesh_torso = all_meshes.torso;
-mesh_spine = all_meshes.spine;
-mesh_bone = all_meshes.bone;
-mesh_heart = all_meshes.heart;
-mesh_lungs = all_meshes.lungs;
-% mesh_brain = all_meshes.brain;
-% mesh_skull = all_meshes.oskull;
-
-% sensors = all_meshes.fullbody_sensors;
-sensors_back = all_meshes.front_sensors;
+all_meshes    = cr_check_registration(S);
+mesh_torso    = all_meshes.torso;
+mesh_spine    = all_meshes.spine;
+mesh_bone     = all_meshes.bone;
+mesh_heart    = all_meshes.heart;
+mesh_lungs    = all_meshes.lungs;
+% mesh_brain  = all_meshes.brain;        % uncomment if S.brain = true
+% mesh_skull  = all_meshes.oskull;       % uncomment if S.brain = true
+% sensors     = all_meshes.fullbody_sensors; % uncomment if S.fullbody = 1
+sensors_back  = all_meshes.front_sensors;
 sensors_front = all_meshes.back_sensors;
 
-%% create spine sources
+%% Generate spinal cord centreline source model
 y_min = min(mesh_spine.vertices(:,2));
 y_max = max(mesh_spine.vertices(:,2));
 
-S = [];
-S.spine = mesh_spine;
-S.resolution = 5; 
-S.ylim = [y_min y_max];
-S.unit = 'mm';
+S            = [];
+S.spine      = mesh_spine;
+S.resolution = 5;
+S.ylim       = [y_min y_max];
+S.unit       = 'mm';
+
 spine_sources = cr_generate_spine_center(S);
 
-%% this is everything we need for BEM and FEM forward modelling!
-
+%% Ready for BEM/FEM forward modelling
+% Pass the following to your forward modelling pipeline (msg_fwd):
+%   - all_meshes    (registered simulation meshes)
+%   - spine_sources (spinal cord source locations)
+%   - all_meshes.transform (transformation matrix)
+%   - sensors_back / sensors_front (generated sensor arrays)

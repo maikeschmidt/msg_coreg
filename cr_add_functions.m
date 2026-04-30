@@ -1,11 +1,51 @@
-% Automatically detects if all the needed functions are in path
-% repository for the hbf libaray for BEM to be run
+% cr_add_functions - Check and configure all required toolbox dependencies
 %
+% Detects and adds all necessary functions and libraries to the MATLAB path
+% for the MSG Coregistration Toolbox to run. Specifically:
+%   - Adds the Helsinki BEM (HBF) library (cloning via git submodule if absent)
+%   - Creates lowercase wrapper functions for FieldTrip compatibility
+%   - Copies required private HBF/FieldTrip functions to an accessible folder
+%
+% This function should be called once at the start of a session before
+% using any other toolbox functions.
+%
+% USAGE:
+%   cr_add_functions()
+%
+% INPUT:
+%   None
+%
+% OUTPUT:
+%   None — modifies the MATLAB path in place and copies files as needed
+%
+% DEPENDENCIES:
+%   - coreg_path()         : locates the repository root directory
+%   - hbf_SetPaths()       : sets up Helsinki BEM library paths
+%   - FieldTrip            : ft_defaults must be on the MATLAB path
+%   - Git                  : required if HBF submodule has not been initialised
+%
+% NOTES:
+%   - The HBF library is expected at: <repo_root>/hbf_lc_p
+%   - FieldTrip wrapper functions are written to: <repo_root>/hbf_ft_wrappers
+%   - Private helper functions are copied to:     <repo_root>/hbf_private
+%   - Wrappers are only created where lowercase versions are missing,
+%     to avoid conflicts with existing FieldTrip installations
+%
+% EXAMPLE:
+%   cr_add_functions()   % run once at the start of your session
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
 % Department of Imaging Neuroscience
 %
 % Author: Maike Schmidt
-% Date: April 2026
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
 %
 function cr_add_functions
 % Add Helsinki BEM library and ensure HBF helper functions are accessible

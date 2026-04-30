@@ -1,3 +1,12 @@
+% Automatically detects if all the needed functions are in path
+% repository for the hbf libaray for BEM to be run
+%
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Date: April 2026
+%
 function cr_add_functions
 % Add Helsinki BEM library and ensure HBF helper functions are accessible
 

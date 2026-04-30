@@ -22,14 +22,12 @@ msg_coreg/
 ├── cr_generate_sensor_array_v4.m
 ├── cr_generate_spine_center.m
 ├── cr_get_fids.m
-├── cr_load_meshes.asv
 ├── cr_load_meshes.m
 ├── cr_register_brain.m
 ├── cr_register_torso.m
-├── determine_body_scan_units.mlx
 ├── example/
 │   ├── example_script_1.m
-│   └── example_script_2
+│   └── example_script_2.m
 ├── meshes/
 │   ├── back_muscle_temp.stl
 │   ├── canonical_cervical_cont.stl
@@ -42,7 +40,6 @@ msg_coreg/
 │   ├── canonical_lungs.stl
 │   ├── canonical_torso.stl
 │   ├── cervical_spine.stl
-│   ├── expl
 │   ├── heart.stl
 │   ├── mri_cervical_cont.stl
 │   ├── mri_cervical_homo.stl

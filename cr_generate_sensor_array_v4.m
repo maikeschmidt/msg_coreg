@@ -1,3 +1,86 @@
+% cr_generate_sensor_array_v4 - Generate triaxial MEG/OPM or EEG sensor array
+%                               across a subject torso surface
+%
+% Raycasts a canonical or anatomical torso mesh onto a subject surface to
+% place sensors at a specified depth below the skin. Supports front, back,
+% and full 360° body coverage modes, with optional conversion to EEG
+% electrode format.
+%
+% USAGE:
+%   grad = cr_generate_sensor_array_v4(S)
+%
+% INPUT:
+%   S             - Structure with the following fields:
+%
+%   Required:
+%     S.subject     - Subject mesh (struct with .vertices and .faces)
+%                     or path to a GIfTI file
+%     S.T           - 4x4 transform matrix (canonical torso → subject space)
+%
+%   Optional:
+%     S.resolution  - Grid spacing in mm (default: 10)
+%     S.depth       - Sensor depth offset from skin surface in mm (default: 10)
+%     S.frontflag   - 0 = back sensors (default) | 1 = front sensors
+%                     Ignored if S.fullbody = 1
+%     S.fullbody    - 1 = full 360° coverage | 0 = front/back only (default: 0)
+%     S.zlim        - [min_z, max_z] to crop sensor placement along Z axis
+%     S.triaxial    - 1 = triaxial sensors (default) | 0 = radial only
+%     S.coverage    - Scalar (0..1) for symmetric coverage, or
+%                     4-element vector [top bottom left right] (default: 0.6)
+%     S.senstype    - 'grad' for OPM/MEG (default) | 'elec' for EEG
+%     S.torsotype   - 'anatomical' (default) | 'canonical'
+%     S.outer_mesh  - Mesh surface to place sensors on (default: 'torso')
+%
+% OUTPUT:
+%   grad          - FieldTrip-compatible sensor struct containing:
+%                     .coilpos  - Sensor positions [nSensors x 3]
+%                     .coilori  - Sensor orientations [nSensors x 3]
+%                     .label    - Channel labels
+%                     .tra      - Transfer matrix
+%                     .unit     - Units ('mm')
+%                   For EEG (S.senstype = 'elec'), returns an electrode
+%                   struct with common-average reference matrix (.tra)
+%
+% DEPENDENCIES:
+%   - coreg_path()              : locates the repository root
+%   - cr_get_fids()             : loads canonical fiducial positions
+%   - spm_mesh_transform()      : applies transform to mesh
+%   - spm_mesh_normals()        : computes surface normals
+%   - spm_mesh_ray_intersect()  : raycasting onto mesh surface
+%   - ft_datatype_sens()        : FieldTrip sensor formatting
+%
+% NOTES:
+%   - In triaxial mode, three sensors are placed at each grid point:
+%     one radial (R) and two tangential (T1, T2)
+%   - In full body mode, sensor orientations follow surface normals
+%   - In front/back mode, orientations are fixed along the ray direction
+%   - EEG mode uses the first 2/3 of coil positions as electrode locations
+%     with a common-average reference matrix
+%
+% EXAMPLE:
+%   S.subject    = my_subject_mesh;
+%   S.T          = transform_matrix;
+%   S.resolution = 30;
+%   S.depth      = -10;
+%   S.coverage   = 0.6;
+%   S.frontflag  = 0;       % back sensors
+%   S.senstype   = 'grad';  % OPM/MEG
+%   grad = cr_generate_sensor_array_v4(S);
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
+
+
 function grad = cr_generate_sensor_array_v4(S)
 % Generate triaxial MEG/OPM sensor array across torso surface with coverage
 %

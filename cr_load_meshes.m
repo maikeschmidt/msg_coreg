@@ -1,3 +1,80 @@
+% cr_load_meshes - Load and transform anatomical mesh components for BEM simulation
+%
+% Loads a set of anatomical STL meshes (torso, lungs, heart, spine, bone,
+% and optionally back muscle) from the repository meshes folder, applies a
+% 4x4 rigid-body transform to register them to subject space, and returns
+% them as a struct of mesh components ready for BEM forward modelling.
+%
+% USAGE:
+%   meshes = cr_load_meshes(T, loadSpine, spineType, boneType, ...
+%                           torsoType, lungType, heartType, includeMuscle)
+%
+% INPUT:
+%   T             - 4x4 rigid-body transform matrix (canonical → subject
+%                   space). Pass [] or omit to use identity (default: eye(4))
+%   loadSpine     - Logical; include spine and bone meshes (default: true)
+%   spineType     - Spine mesh filename string, e.g.:
+%                     'spine' | 'mri_full_spine' | 'mri_cervical_spine' |
+%                     'cervical_spine'
+%   boneType      - Bone mesh filename string, e.g.:
+%                     'realistic_full_bone' | 'mri_full_inhomo' |
+%                     'canonical_full_homo' | 'mri_cervical_cont'
+%   torsoType     - Torso mesh filename string:
+%                     'mri_torso' | 'canonical_torso'
+%   lungType      - Lung mesh filename string:
+%                     'mri_lungs' | 'canonical_lungs'
+%   heartType     - Heart mesh filename string:
+%                     'heart' | 'canonical_heart'
+%   includeMuscle - Logical; include back muscle mesh (default: false)
+%                   Only available for anatomical torso mode
+%
+% OUTPUT:
+%   meshes        - Struct with fields for each loaded mesh component.
+%                   Field names are normalised to core names regardless of
+%                   variant filename used:
+%                     .torso       - Torso surface mesh
+%                     .lungs       - Lung mesh
+%                     .heart       - Heart mesh
+%                     .bone        - Bone/spine bone mesh
+%                     .spine       - Spine centreline mesh
+%                     .back_muscle - Back muscle mesh (if includeMuscle)
+%                   Each mesh is a struct with:
+%                     .vertices    - [N x 3] vertex coordinates (mm)
+%                     .faces       - [M x 3] face indices
+%                     .unit        - 'mm'
+%
+% DEPENDENCIES:
+%   - coreg_path()           : locates the repository meshes folder
+%   - spm_mesh_transform()   : applies the 4x4 transform to each mesh
+%   - stlread()              : reads STL files (supports modern and legacy
+%                              MATLAB formats)
+%
+% NOTES:
+%   - All STL files are expected in <repo_root>/meshes/
+%   - Vertices are deduplicated with a tolerance of 1e-6 before output
+%   - Variant mesh filenames (e.g. 'mri_full_inhomo') are mapped to core
+%     struct field names (e.g. 'bone') automatically
+%   - Missing STL files produce a warning and are skipped rather than
+%     causing an error
+%
+% EXAMPLE:
+%   T = cr_register_torso(regS);
+%   meshes = cr_load_meshes(T, true, 'mri_full_spine', 'mri_full_homo', ...
+%                           'mri_torso', 'mri_lungs', 'heart', false);
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
+
 function meshes = cr_load_meshes(T, loadSpine, spineType, boneType, torsoType, lungType, heartType, includeMuscle)
 
 if nargin < 1 || isempty(T), T = eye(4); end

@@ -1,3 +1,66 @@
+% cr_generate_spine_center - Generate a centre-line source model along the spine mesh
+%
+% Computes a series of centre points along the spine mesh by slicing at
+% regular Y intervals, finding the cross-sectional midpoint and local
+% diameter at each level. The result is a source struct compatible with
+% downstream BEM/leadfield computations.
+%
+% USAGE:
+%   src = cr_generate_spine_center(S)
+%
+% INPUT:
+%   S                  - Structure with the following fields:
+%
+%   Required:
+%     S.spine            - Spine mesh struct with .vertices and .faces
+%     S.ylim             - [y_min, y_max] range along Y axis to sample (mm)
+%     S.unit             - Units string, e.g. 'mm'
+%
+%   Optional:
+%     S.resolution       - Initial slice spacing in mm (default: 1)
+%     S.spacing_increase - Fractional increase in spacing per step, e.g.
+%                          0.02 for 2% progressive spacing (default: 0)
+%
+% OUTPUT:
+%   src           - Source model struct containing:
+%                     .pos    - Centre-line positions [N x 3] (mm)
+%                     .zdist  - Local cross-sectional diameter at each
+%                               centre point [N x 1]
+%                     .inside - Logical array of ones [N x 1]
+%                     .unit   - Units string (inherited from S.unit)
+%                     .zlim   - [min_z, max_z] range of collected Z values
+%
+% NOTES:
+%   - Slicing proceeds from y_max down to y_min along the Y axis
+%   - At each Y level, vertices within the current resolution window are
+%     projected onto a local cross-sectional plane to estimate diameter
+%     via convex hull; levels with fewer than 3 points use a nominal
+%     diameter of 0.001
+%   - If S.spacing_increase > 0, slice spacing grows progressively,
+%     producing coarser sampling toward the lower spine
+%
+% EXAMPLE:
+%   S.spine            = spine_mesh;
+%   S.ylim             = [y_min, y_max];
+%   S.unit             = 'mm';
+%   S.resolution       = 1;
+%   S.spacing_increase = 0.02;   % 2% progressive spacing
+%   src = cr_generate_spine_center(S);
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
+
+
 function src = cr_generate_spine_center(S)
     % Ensure required fields are present
     if ~isfield(S, 'resolution'); S.resolution = 1; end

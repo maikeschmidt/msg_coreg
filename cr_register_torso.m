@@ -1,6 +1,80 @@
+% cr_register_torso - Register the canonical torso mesh to a subject body scan
+%
+% Computes the affine transform required to fit the canonical torso mesh
+% (including head and neck) to a subject surface scan using a three-stage
+% pipeline: unit normalisation, fiducial-based rigid-body alignment, and
+% ICP refinement. The resulting transform matrix can be passed directly to
+% cr_load_meshes() and cr_generate_sensor_array_v4().
+%
+% USAGE:
+%   M = cr_register_torso(S)
+%
+% INPUT:
+%   S              - Structure with the following fields:
+%
+%   Required:
+%     S.fiducials    - 3x3 matrix of subject fiducial coordinates [mm]:
+%                        Row 1: Left shoulder
+%                        Row 2: Right shoulder
+%                        Row 3: Chin
+%     S.subject      - Subject body scan mesh struct (.vertices, .faces)
+%
+%   Optional:
+%     S.dist         - ICP distance threshold in m for point selection
+%                      (default: 0.02)
+%     S.plot         - Logical; display registration figure (default: false)
+%
+% OUTPUT:
+%   M              - 4x4 cumulative affine transform matrix
+%                    (canonical torso → subject space)
+%                    Combines scaling (M0), rigid-body (M1), and ICP (M2):
+%                    M = M2 * M1 * M0
+%
+% DEPENDENCIES:
+%   - coreg_path()               : locates canonical_torso.stl
+%   - stlread()                  : reads STL files (supports modern and
+%                                  legacy MATLAB formats)
+%   - determine_body_scan_units(): estimates scale factor from fiducial
+%                                  triangle areas (defined in this file)
+%   - spm_eeg_inv_rigidreg()     : fiducial-based rigid-body registration
+%   - spm_eeg_inv_icp()          : iterative closest point refinement
+%   - knnsearch()                : MATLAB Statistics Toolbox k-NN search
+%
+% NOTES:
+%   Registration pipeline:
+%     1. Unit normalisation  — scale factor estimated from the area of the
+%                              fiducial triangle (shoulder-shoulder-chin)
+%                              in each space; rounds to nearest power of 10
+%     2. Rigid-body alignment — aligns canonical torso fiducials (vertices
+%                              3104, 8807, 858) to subject fiducials
+%     3. ICP refinement      — refines using canonical torso vertices
+%                              within S.dist * sf of the subject surface
+%   - The canonical torso STL is loaded from:
+%     <repo_root>/meshes/canonical_torso.stl
+%   - Fiducial vertex indices (3104, 8807, 858) correspond to left
+%     shoulder, right shoulder, and chin respectively
+%
+% EXAMPLE:
+%   disp('Select fiducials: left shoulder, right shoulder, chin');
+%   S.fiducials = spm_mesh_select(subject_mesh)';
+%   S.subject   = subject_mesh;
+%   S.plot      = true;
+%   M = cr_register_torso(S);
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
+
 function M = cr_register_torso(S)
-% Generates the affine transform required to fit the canonical torso 
-% (including head and neck) to a subject scan.
 
 if ~isfield(S,'fiducials'), error('You must provide fiducial locations'); end
 if ~isfield(S,'subject'), error('You must provide a mesh to fit to!'); end

@@ -1,5 +1,78 @@
+% cr_register_brain - Register SPM template brain meshes to a subject head surface
+%
+% Fits the SPM canonical brain, scalp, inner skull, and outer skull meshes
+% to a subject head surface using a three-stage pipeline: unit normalisation,
+% fiducial-based rigid-body alignment, and ICP refinement. Includes automatic
+% detection and correction of mirror-flip ambiguity.
+%
+% USAGE:
+%   [temp_brain, T] = cr_register_brain(S)
+%
+% INPUT:
+%   S              - Structure with the following fields:
+%
+%   Required:
+%     S.fiducials    - 3x3 matrix of subject fiducial coordinates [mm]:
+%                        Row 1: Nasion (NAS)
+%                        Row 2: Left pre-auricular point (LPA)
+%                        Row 3: Right pre-auricular point (RPA)
+%     S.head         - Subject head/torso mesh struct (.vertices, .faces)
+%                      used to verify brain placement after registration
+%
+%   Optional:
+%     S.dist         - ICP distance threshold in m (default: 0.02)
+%     S.plot         - Logical; display registration figure (default: false)
+%
+% OUTPUT:
+%   temp_brain     - Struct containing registered SPM canonical meshes:
+%                      .brain   - Cortical surface mesh
+%                      .scalp   - Scalp surface mesh
+%                      .iskull  - Inner skull mesh
+%                      .oskull  - Outer skull mesh
+%                    Each mesh is a struct with .vertices [N x 3] and
+%                    .faces [M x 3]
+%   T              - 4x4 cumulative transform matrix (template → subject)
+%
+% DEPENDENCIES:
+%   - spm()                    : SPM installation for canonical meshes and
+%                                fiducial template
+%   - spm_eeg_fixpnt()         : reads fiducial point file
+%   - ft_read_headshape()      : FieldTrip headshape reader
+%   - determine_body_scan_units() : estimates scale factor between spaces
+%   - spm_eeg_inv_rigidreg()   : fiducial-based rigid-body registration
+%   - spm_eeg_inv_icp()        : iterative closest point refinement
+%   - tt_is_inside()           : point-in-mesh test for flip detection
+%
+% NOTES:
+%   Registration pipeline:
+%     1. Unit normalisation  — scale template to match subject units
+%     2. Rigid-body alignment — align template fiducials to subject fiducials
+%     3. ICP refinement      — refine using Gaussian point clouds (~20mm
+%                              radius, 300 points) seeded around fiducials
+%     4. Mirror-flip check   — tests 20% of brain vertices against S.head;
+%                              if misplaced, reflects across the fiducial
+%                              plane and updates T accordingly
+%
+% EXAMPLE:
+%   S.fiducials = [nas; lpa; rpa];   % 3x3 matrix of coordinates
+%   S.head      = torso_mesh;
+%   S.plot      = true;
+%   [temp_brain, T] = cr_register_brain(S);
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_coreg
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Coregistration Toolbox.
+
 function [temp_brain, T] = cr_register_brain(S)
-% Generates the affine transform to fit the spm template brain to a subject
 
 if ~isfield(S, 'fiducials'), error('You must provide fiducial locations (nas, LP and RP)'); end
 if ~isfield(S, 'head'), error('You must provide a head shape to fit to!'); end

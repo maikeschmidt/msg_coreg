@@ -82,20 +82,6 @@
 
 
 function grad = cr_generate_sensor_array_v4(S)
-% Generate triaxial MEG/OPM sensor array across torso surface with coverage
-%
-% Required fields in S:
-%   S.subject   - subject mesh (struct with .vertices and .faces) OR path to mesh
-%   S.T         - 4x4 transform matrix (canonical torso → subject)
-%
-% Optional fields:
-%   S.resolution - grid spacing in mm (default 10)
-%   S.depth      - depth offset from skin in mm (default 10)
-%   S.frontflag  - 0=back (default), 1=front (ignored if fullbody=1)
-%   S.fullbody   - 1=full 360° coverage, 0=front/back only (default 0)
-%   S.zlim       - [min_z, max_z] for cropping
-%   S.triaxial   - 1 (default)
-%   S.coverage   - scalar (0..1) OR [top bottom left right] (0..1)
 
 if ~isfield(S,'subject'), error('Please provide subject mesh!'); end
 if ~isfield(S,'T'), error('Please provide transform matrix S.T!'); end

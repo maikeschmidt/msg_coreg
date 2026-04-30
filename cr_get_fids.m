@@ -47,8 +47,6 @@
 
 
 function fids = cr_get_fids(torsotype)
-% Returns 4x3 fiducials for canonical or anatomical torso
-% Rows: [L_shoulder; R_shoulder; chin; lumbar]
 
 if nargin<1, torsotype='anatomical'; end
 

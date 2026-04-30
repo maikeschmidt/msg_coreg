@@ -48,7 +48,6 @@
 % This file is part of the MSG Coregistration Toolbox.
 %
 function cr_add_functions
-% Add Helsinki BEM library and ensure HBF helper functions are accessible
 
 % Paths
 hbf_path = fullfile(coreg_path, 'hbf_lc_p');

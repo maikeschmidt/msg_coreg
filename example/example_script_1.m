@@ -106,10 +106,96 @@ S.unit       = 'mm';
 
 spine_sources = cr_generate_spine_center(S);
 
-%% Ready for BEM/FEM forward modelling
-% Pass the following to your forward modelling pipeline (msg_fwd):
-%   - all_meshes  (registered simulation meshes)
-%   - spine_sources (spinal cord source locations)
-%   - all_meshes.transform (transformation matrix)
+%% CREATE SHIFTED SOURCE MODELS FOR SENSITIVITY ANALYSIS
+% Generates 18 shifted versions of the spinal cord source model by
+% translating all source positions independently along each axis (X, Y, Z).
+% Together with the original, this gives 19 geometry configurations
+% for BEM leadfield computation.
+%
+% Shift magnitudes (mm), applied independently per axis:
+%   X axis (Left-Right):      ±2, ±4, ±6 mm
+%   Y axis (Rostral-Caudal):  ±2, ±4, ±6 mm
+%   Z axis (Ventral-Dorsal):  ±2, ±4, ±6 mm
 
+% Each row: [dx, dy, dz] — only one axis non-zero per shift
+shift_vectors_mm = [
+    % X axis shifts (Left-Right)
+     2,  0,  0;
+     4,  0,  0;
+     6,  0,  0;
+    -2,  0,  0;
+    -4,  0,  0;
+    -6,  0,  0;
+    % Y axis shifts (Rostral-Caudal)
+     0,  2,  0;
+     0,  4,  0;
+     0,  6,  0;
+     0, -2,  0;
+     0, -4,  0;
+     0, -6,  0;
+    % Z axis shifts (Ventral-Dorsal)
+     0,  0,  2;
+     0,  0,  4;
+     0,  0,  6;
+     0,  0, -2;
+     0,  0, -4;
+     0,  0, -6;
+];
+
+shift_labels = {
+    % X axis
+    'shift_x_pos2mm', 'shift_x_pos4mm', 'shift_x_pos6mm', ...
+    'shift_x_neg2mm', 'shift_x_neg4mm', 'shift_x_neg6mm'; ...
+    % Y axis
+    'shift_y_pos2mm', 'shift_y_pos4mm', 'shift_y_pos6mm', ...
+    'shift_y_neg2mm', 'shift_y_neg4mm', 'shift_y_neg6mm'; ...
+    % Z axis
+    'shift_z_pos2mm', 'shift_z_pos4mm', 'shift_z_pos6mm', ...
+    'shift_z_neg2mm', 'shift_z_neg4mm', 'shift_z_neg6mm'; ...
+};
+
+% Save original geometry as the reference
+geom_original = struct();
+geom_original.mesh_wm               = mesh_wm;
+geom_original.mesh_bone             = mesh_bone;
+geom_original.mesh_heart            = mesh_heart;
+geom_original.mesh_lungs            = mesh_lungs;
+geom_original.mesh_torso            = mesh_torso;
+geom_original.sources_cent          = spine_sources;
+geom_original.experimental_sensors  = exp_sensors;
+
+outfile_original = fullfile(savepath, 'geometries_original.mat');
+save(outfile_original, '-struct', 'geom_original', '-v7.3');
+fprintf('Saved: geometries_original.mat\n');
+
+% Generate and save each shifted geometry
+for s = 1:size(shift_vectors_mm, 1)
+
+    shift_mm = shift_vectors_mm(s, :);
+    label    = shift_labels{s};
+
+    fprintf('Creating shifted geometry: %s (shift = [%d %d %d] mm)...\n', ...
+        label, shift_mm(1), shift_mm(2), shift_mm(3));
+
+    % Shift source positions in mm
+    shifted_sources     = spine_sources;
+    shifted_sources.pos = spine_sources.pos + shift_mm;
+
+    % Package geometry — meshes and sensors unchanged, only sources shift
+    geom_shifted                        = struct();
+    geom_shifted.mesh_wm                = mesh_wm;
+    geom_shifted.mesh_bone              = mesh_bone;
+    geom_shifted.mesh_heart             = mesh_heart;
+    geom_shifted.mesh_lungs             = mesh_lungs;
+    geom_shifted.mesh_torso             = mesh_torso;
+    geom_shifted.sources_cent           = shifted_sources;
+    geom_shifted.experimental_sensors   = exp_sensors;
+
+    outfile = fullfile(savepath, ['geometries_' label '.mat']);
+    save(outfile, '-struct', 'geom_shifted', '-v7.3');
+    fprintf('  Saved: geometries_%s.mat\n', label);
+end
+
+fprintf('All geometry files saved to: %s\n', savepath);
+fprintf('Ready to run BEM leadfields via run_bem_leadfields in msg_fwd\n');
 

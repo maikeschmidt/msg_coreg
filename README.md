@@ -228,9 +228,46 @@ https://github.com/maikeschmidt/msg_fwd
 ### example_script_1.m — Register meshes with an existing sensor array
 
 Demonstrates how to register canonical or anatomical simulation meshes into 
-experimental sensor space and import an existing sensor layout (MEG/OPM or EEG). 
+experimental sensor space and import an existing experimental OPM sensor layout. 
 Recommended when you already have an experimentally defined sensor layout and 
 want to run simulations in the same coordinate system as recorded data.
+
+This script also includes a **source position sensitivity analysis** section
+which generates 18 shifted versions of the spinal cord source model (±2, ±4,
+and ±6 mm independently along X, Y, and Z) plus the original, producing 19
+geometry `.mat` files ready for BEM leadfield computation in `msg_fwd`. This
+is used to assess how sensitive forward solutions are to small uncertainties
+in spinal cord source localisation.
+
+The 19 geometry files produced are:
+geometries_original.mat
+geometries_shift_x_pos2mm.mat
+geometries_shift_x_pos4mm.mat
+geometries_shift_x_pos6mm.mat
+geometries_shift_x_neg2mm.mat
+geometries_shift_x_neg4mm.mat
+geometries_shift_x_neg6mm.mat
+geometries_shift_y_pos2mm.mat
+geometries_shift_y_pos4mm.mat
+geometries_shift_y_pos6mm.mat
+geometries_shift_y_neg2mm.mat
+geometries_shift_y_neg4mm.mat
+geometries_shift_y_neg6mm.mat
+geometries_shift_z_pos2mm.mat
+geometries_shift_z_pos4mm.mat
+geometries_shift_z_pos6mm.mat
+geometries_shift_z_neg2mm.mat
+geometries_shift_z_neg4mm.mat
+geometries_shift_z_neg6mm.mat
+
+Pass these filenames to `run_bem_leadfields.m` in `msg_fwd` to compute 
+leadfields for all configurations, then run `plot_sensitivity_analysis.m` 
+to analyse and visualise the results.
+
+> **Note:** The sensitivity analysis section requires an experimental sensor
+> array saved as `experimental_sensors` in the geometry struct. The meshes
+> and sensor array are identical across all 19 configurations — only the
+> source positions differ.
 
 ### example_script_2.m — Build anatomical meshes and generate a sensor array
 
@@ -239,6 +276,7 @@ geometry, realistic MRI-segmented bone, and scanner-cast optical surface
 (`surface.stl`). Reproduces the simulation setup used in the publication. 
 Recommended when accurate spinal cord positioning or realistic bone geometry 
 is required.
+
 
 ---
 

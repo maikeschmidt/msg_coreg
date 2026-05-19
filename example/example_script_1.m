@@ -349,3 +349,10 @@ for b = 1:n_bundles
         fprintf("  'geometries_sensor_bundle%d_shift%d'\n", b, s);
     end
 end
+
+%% Ready for BEM/FEM forward modelling
+% Pass the following to your forward modelling pipeline (msg_fwd):
+%   - all_meshes    (registered simulation meshes)
+%   - spine_sources (spinal cord source locations)
+%   - all_meshes.transform (transformation matrix)
+%   - sensors_back / sensors_front (generated sensor arrays)

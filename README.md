@@ -223,6 +223,77 @@ https://github.com/maikeschmidt/msg_fwd
 
 ---
 
+## Optional: Forward Model Sensitivity Analysis
+
+Both example scripts include optional sections for generating shifted geometry 
+files that can be used to assess how sensitive forward solutions are to 
+registration uncertainty. These sections are **self-contained and clearly 
+labelled** within each script — they can be run or skipped independently of 
+the main coregistration workflow.
+
+Two types of sensitivity analysis are supported, corresponding to two 
+different sources of registration error:
+
+### Source position sensitivity
+
+Evaluates uncertainty in spinal cord localisation by shifting the source 
+model by small fixed amounts independently along each anatomical axis 
+(±2, ±4, ±6 mm in X, Y, and Z). This produces 18 shifted geometry files 
+plus the original (19 total), each with an identical mesh and sensor array 
+but a translated source model.
+
+This is useful for quantifying how much the predicted sensor pattern 
+changes if the spinal cord centre line is misregistered by a few millimetres.
+
+**When to use:** when you want to assess the impact of anatomical 
+uncertainty on forward model accuracy, for example when using canonical 
+meshes where spinal cord positioning is approximate.
+
+### Sensor array sensitivity
+
+Evaluates uncertainty in sensor array registration by shifting the entire 
+sensor array by random 3D displacements [dx, dy, dz]. Shifts are grouped 
+into three bundles representing different registration error scales 
+(~2 mm, ~5 mm, ~10 mm), with 8 random realisations per bundle. This 
+produces 24 shifted geometry files plus the original (25 total), each with 
+an identical mesh and source model but a translated sensor array.
+
+Sensor orientations (`coilori`, `chanori`) and the transfer matrix (`tra`) 
+are **not modified** — only `coilpos` and `chanpos` are shifted, so the 
+triaxial orthogonal structure of the sensor array is fully preserved.
+
+Shifts are generated with `rng(42)` for reproducibility. The exact 
+[dx, dy, dz] vectors are printed at runtime and can be hardcoded in the 
+script for exact reproduction across machines.
+
+**When to use:** when you want to assess how sensitive forward solutions 
+are to errors in sensor array placement or body scan registration, for 
+example when the sensor-to-body transform has limited accuracy.
+
+### Running the sensitivity analyses
+
+Both sensitivity sections are at the end of each example script and can 
+be run after the main coregistration workflow completes. The geometry 
+`.mat` files they produce are passed directly to `run_bem_leadfields.m` 
+in `msg_fwd` for leadfield computation, and then analysed using the 
+sensitivity pipeline in `msg_fwd`. No additional configuration of 
+`msg_coreg` is required.
+
+Full workflow:
+
+```matlab
+% 1. Run the main coregistration workflow (example_script_1 or _2)
+% 2. Run the sensitivity section(s) at the end of the same script
+%    — these save geometry .mat files to the same output folder
+% 3. In msg_fwd: run BEM leadfields for the shifted geometry files
+% 4. In msg_fwd: run compute_sensitivity_rsq, then plot/table scripts
+```
+
+See the `msg_fwd` README for the full sensitivity analysis pipeline:  
+https://github.com/maikeschmidt/msg_fwd
+
+---
+
 ## Example Scripts
 
 ### example_script_1.m — Register meshes with an existing sensor array
@@ -232,12 +303,12 @@ experimental sensor space and import an existing experimental OPM sensor layout.
 Recommended when you already have an experimentally defined sensor layout and 
 want to run simulations in the same coordinate system as recorded data.
 
-This script also includes a **source position sensitivity analysis** section
-which generates 18 shifted versions of the spinal cord source model (±2, ±4,
-and ±6 mm independently along X, Y, and Z) plus the original, producing 19
-geometry `.mat` files ready for BEM leadfield computation in `msg_fwd`. This
-is used to assess how sensitive forward solutions are to small uncertainties
-in spinal cord source localisation.
+**Optional sensitivity analysis sections** (at the end of the script):
+
+**Source position sensitivity** — generates 19 geometry files (1 original 
++ 18 shifted) with source positions translated by ±2, ±4, and ±6 mm 
+independently along X, Y, and Z. The meshes and sensor array are identical 
+across all configurations.
 
 The 19 geometry files produced are:
 geometries_original.mat
@@ -260,14 +331,14 @@ geometries_shift_z_neg2mm.mat
 geometries_shift_z_neg4mm.mat
 geometries_shift_z_neg6mm.mat
 
-Pass these filenames to `run_bem_leadfields.m` in `msg_fwd` to compute 
-leadfields for all configurations, then run `plot_sensitivity_analysis.m` 
-to analyse and visualise the results.
+**Sensor array sensitivity** — generates 25 geometry files (1 original + 
+24 shifted) with the entire sensor array translated by random [dx, dy, dz] 
+displacements in three bundles by error scale. The meshes and source model 
+are identical across all configurations.
 
-> **Note:** The sensitivity analysis section requires an experimental sensor
-> array saved as `experimental_sensors` in the geometry struct. The meshes
-> and sensor array are identical across all 19 configurations — only the
-> source positions differ.
+> **Note:** Both sensitivity sections require an experimental sensor array 
+> saved as `experimental_sensors` in the geometry struct, which is set up 
+> earlier in this script.
 
 ### example_script_2.m — Build anatomical meshes and generate a sensor array
 
@@ -277,6 +348,11 @@ geometry, realistic MRI-segmented bone, and scanner-cast optical surface
 Recommended when accurate spinal cord positioning or realistic bone geometry 
 is required.
 
+Also includes the same optional sensitivity analysis sections as 
+`example_script_1.m`, allowing sensitivity analyses to be run from either 
+the canonical or anatomical modelling workflow.
+
+---
 
 ---
 

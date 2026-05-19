@@ -196,6 +196,156 @@ for s = 1:size(shift_vectors_mm, 1)
     fprintf('  Saved: geometries_%s.mat\n', label);
 end
 
-fprintf('All geometry files saved to: %s\n', savepath);
-fprintf('Ready to run BEM leadfields via run_bem_leadfields in msg_fwd\n');
+%% CREATE SHIFTED SENSOR ARRAY MODELS FOR SENSITIVITY ANALYSIS
+% Generates sensor-shifted geometry files by translating the entire
+% experimental OPM array by a random 3D displacement [dx, dy, dz],
+% where each axis component is drawn independently from a uniform
+% distribution centred around a target magnitude.
+%
+% THREE BUNDLES of 8 shifts, one per registration error scale:
+%   Bundle 1 — small errors:   each axis shift drawn from U(-3, -1) ∪ U(1, 3) mm
+%   Bundle 2 — medium errors:  each axis shift drawn from U(-7, -3) ∪ U(3, 7) mm
+%   Bundle 3 — large errors:   each axis shift drawn from U(-13,-7) ∪ U(7,13) mm
+%
+% Each shift is a unique [dx, dy, dz] vector — all three axes move
+% simultaneously but by independently drawn amounts. Signs are random
+% so shifts can be in either direction along each axis.
+%
+% 24 shifted configurations + 1 original = 25 geometry files total.
+%
+% Sensor orientations (coilori, chanori) and transfer matrix (tra)
+% are NOT modified — only coilpos and chanpos are shifted so the
+% triaxial orthogonal structure remains intact.
+%
+% REPRODUCIBILITY:
+%   Random seed is set below. Change the seed for a different random
+%   realisation, or uncomment the hardcoded block to fix specific values.
 
+% Random seed 
+rng(42);   % SET THIS: change seed for a different random realisation
+
+% Bundle definitions
+% Each bundle: [lower_bound, upper_bound] for the magnitude of each axis
+% shift. Signs are applied randomly after magnitude is drawn.
+bundle_names  = {'small_2mm', 'medium_5mm', 'large_10mm'};
+bundle_ranges = [1, 3;    % Bundle 1: ~2mm  — uniform U(1,3) mm magnitude
+                 3, 7;    % Bundle 2: ~5mm  — uniform U(3,7) mm magnitude
+                 7, 13];  % Bundle 3: ~10mm — uniform U(7,13) mm magnitude
+n_bundles     = 3;
+n_shifts      = 8;   % shifts per bundle
+
+% Generate shift vectors
+% shift_vectors{b}(s,:) = [dx, dy, dz] in mm for bundle b, shift s
+shift_vectors = cell(1, n_bundles);
+
+for b = 1:n_bundles
+    lo  = bundle_ranges(b, 1);
+    hi  = bundle_ranges(b, 2);
+    vecs = zeros(n_shifts, 3);
+
+    for s = 1:n_shifts
+        % Draw magnitude for each axis independently from U(lo, hi)
+        magnitudes = lo + (hi - lo) * rand(1, 3);
+
+        % Apply random sign independently to each axis
+        signs      = sign(randn(1, 3));   % random +1 or -1 per axis
+        signs(signs == 0) = 1;            % handle exact zero (vanishingly rare)
+
+        vecs(s, :) = magnitudes .* signs;
+    end
+
+    shift_vectors{b} = vecs;
+
+    fprintf('\nBundle %d (%s) — shift vectors [dx, dy, dz] in mm:\n', ...
+        b, bundle_names{b});
+    for s = 1:n_shifts
+        fprintf('  Shift %d: [%+.2f, %+.2f, %+.2f] mm\n', ...
+            s, vecs(s,1), vecs(s,2), vecs(s,3));
+    end
+end
+
+% Option: hardcode specific shift vectors for exact reproducibility
+% Paste the values printed above to lock in specific shifts.
+% Uncomment and fill in to bypass random generation entirely.
+%
+% shift_vectors{1} = [   % Bundle 1 — small (~2mm)
+%    +1.23, -2.01, +1.87;
+%    -1.56, +1.34, -2.45;
+%    +2.11, -1.78, +1.23;
+%    -1.89, +2.34, -1.67;
+%    +1.45, -1.23, +2.78;
+%    -2.34, +1.89, -1.45;
+%    +1.67, -2.56, +1.34;
+%    -2.01, +1.67, -2.23;
+% ];
+% shift_vectors{2} = [ ... ];   % Bundle 2 — medium (~5mm)
+% shift_vectors{3} = [ ... ];   % Bundle 3 — large (~10mm)
+
+% Save original geometry as reference 
+geom_sensor_original = struct();
+geom_sensor_original.mesh_wm               = mesh_wm;
+geom_sensor_original.mesh_bone             = mesh_bone;
+geom_sensor_original.mesh_heart            = mesh_heart;
+geom_sensor_original.mesh_lungs            = mesh_lungs;
+geom_sensor_original.mesh_torso            = mesh_torso;
+geom_sensor_original.sources_cent          = spine_sources;
+geom_sensor_original.experimental_sensors  = exp_sensors;
+geom_sensor_original.shift_type            = 'sensor';
+geom_sensor_original.shift_vectors         = shift_vectors;   % save for reference
+geom_sensor_original.bundle_names          = bundle_names;
+geom_sensor_original.bundle_ranges_mm      = bundle_ranges;
+
+outfile_sensor_original = fullfile(savepath, 'geometries_sensor_original.mat');
+save(outfile_sensor_original, '-struct', 'geom_sensor_original', '-v7.3');
+fprintf('\nSaved: geometries_sensor_original.mat\n');
+
+% Generate and save each shifted geometry 
+for b = 1:n_bundles
+    for s = 1:n_shifts
+        shift_vec = shift_vectors{b}(s, :);   % [dx, dy, dz] in mm
+
+        fprintf('Creating: bundle %d (%s), shift %d  [%+.2f, %+.2f, %+.2f] mm...\n', ...
+            b, bundle_names{b}, s, shift_vec(1), shift_vec(2), shift_vec(3));
+
+        % Apply shift to sensor positions only
+        % coilpos and chanpos shifted by same vector
+        % coilori, chanori, tra, balance left completely untouched
+        % so triaxial orthogonality is fully preserved
+        shifted_sensors         = exp_sensors;
+        shifted_sensors.coilpos = exp_sensors.coilpos + shift_vec;
+        shifted_sensors.chanpos = exp_sensors.chanpos + shift_vec;
+
+        % Package geometry
+        geom_shifted                              = struct();
+        geom_shifted.mesh_wm                      = mesh_wm;
+        geom_shifted.mesh_bone                    = mesh_bone;
+        geom_shifted.mesh_heart                   = mesh_heart;
+        geom_shifted.mesh_lungs                   = mesh_lungs;
+        geom_shifted.mesh_torso                   = mesh_torso;
+        geom_shifted.sources_cent                 = spine_sources;
+        geom_shifted.experimental_sensors         = shifted_sensors;
+        geom_shifted.shift_type                   = 'sensor';
+        geom_shifted.shift_vec_mm                 = shift_vec;
+        geom_shifted.bundle_name                  = bundle_names{b};
+        geom_shifted.bundle_idx                   = b;
+        geom_shifted.shift_idx                    = s;
+
+        label   = sprintf('bundle%d_shift%d', b, s);
+        outfile = fullfile(savepath, ['geometries_sensor_' label '.mat']);
+        save(outfile, '-struct', 'geom_shifted', '-v7.3');
+        fprintf('  Saved: geometries_sensor_%s.mat\n', label);
+    end
+end
+
+fprintf('\nAll sensor-shifted geometry files saved to: %s\n', savepath);
+fprintf('%d configurations total: 1 original + %d shifted (%d bundles x %d shifts)\n', ...
+    1 + n_bundles * n_shifts, n_bundles * n_shifts, n_bundles, n_shifts);
+
+% Print filenames for run_bem_leadfields 
+fprintf('\nFilenames for run_bem_leadfields.m:\n');
+fprintf("  'geometries_sensor_original'\n");
+for b = 1:n_bundles
+    for s = 1:n_shifts
+        fprintf("  'geometries_sensor_bundle%d_shift%d'\n", b, s);
+    end
+end

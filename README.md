@@ -27,7 +27,11 @@ msg_coreg/
 ├── cr_register_torso.m
 ├── example/
 │   ├── example_script_1.m
-│   └── example_script_2.m
+│   └── example_script_2          — anatomical workflow (worked example)
+├── torso_tools/                  — BEM torso forward-modelling helpers (see
+│   │                               torso_tools/README.md); tt_* mesh, registration,
+│   │                               sensor, and BEM utilities
+│   └── ...
 ├── meshes/
 │   ├── back_muscle_temp.stl
 │   ├── canonical_cervical_cont.stl
@@ -135,11 +139,12 @@ Uses **subject-specific anatomical information** based on a custom-built MSG
 scanner cast designed from an anatomical MRI. The transform from MRI space to 
 experimental sensor space is known.
 
-An example optical scan is provided at `meshes/surface.stl`.
+The anatomical workflow expects a scanner-cast optical surface (`surface.stl`).
+This scan is **not bundled** in `meshes/` — supply your own for your setup.
 
 > For accurate spinal cord positioning, use the anatomical meshes together 
-> with the provided `surface.stl`. If you have your own sensor array, provide 
-> your own optical scan and use the canonical meshes instead.
+> with your scanner-cast `surface.stl`. If you have your own sensor array, 
+> provide your own optical scan and use the canonical meshes instead.
 
 ---
 
@@ -286,11 +291,14 @@ Full workflow:
 % 2. Run the sensitivity section(s) at the end of the same script
 %    — these save geometry .mat files to the same output folder
 % 3. In msg_fwd: run BEM leadfields for the shifted geometry files
-% 4. In msg_fwd: run compute_sensitivity_rsq, then plot/table scripts
+% 4. In msg_pert: run pt_load_leadfields, pt_compute_rsq, then plot/table scripts
 ```
 
-See the `msg_fwd` README for the full sensitivity analysis pipeline:  
-https://github.com/maikeschmidt/msg_fwd
+The perturbation/sensitivity analysis pipeline lives in the **msg_pert**
+repository (`pt_*` scripts). msg_pert also has its own, more systematic
+shift generators (`pt_generate_source_shifts`, `pt_generate_sensor_shifts`,
+3 bundles × 8 random shifts) plus conductivity perturbation:  
+https://github.com/maikeschmidt/msg_pert
 
 ---
 
@@ -340,11 +348,11 @@ are identical across all configurations.
 > saved as `experimental_sensors` in the geometry struct, which is set up 
 > earlier in this script.
 
-### example_script_2.m — Build anatomical meshes and generate a sensor array
+### example_script_2 — Build anatomical meshes and generate a sensor array
 
 Demonstrates the full anatomical modelling pipeline using subject-specific 
-geometry, realistic MRI-segmented bone, and scanner-cast optical surface 
-(`surface.stl`). Reproduces the simulation setup used in the publication. 
+geometry, realistic MRI-segmented bone, and a scanner-cast optical surface 
+(user-supplied `surface.stl`). Reproduces the simulation setup used in the publication. 
 Recommended when accurate spinal cord positioning or realistic bone geometry 
 is required.
 

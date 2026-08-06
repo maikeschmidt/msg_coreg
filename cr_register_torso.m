@@ -122,37 +122,81 @@ else
 end
 
 
-% Fiducials of the torso
-% - Left shoulder (point 3107)
-% - Right shoulder (point 8838)
-% - Chin (point 860)
-% - Lower Spine (point 5568)
+% Fiducials of the canonical torso: left shoulder, right shoulder, chin.
+%
+% THESE ARE COORDINATES, NOT VERTEX INDICES — AND THAT IS DELIBERATE.
+%
+% This code previously used the hardcoded vertex indices 3104, 8807 and 858.
+% Those index the UNMERGED vertex list of canonical_torso.stl, which has
+% 3 vertices per face = 12,390 entries. MATLAB's built-in stlread returns a
+% triangulation with duplicate points MERGED — 2,067 vertices — so the
+% indices ran off the end and the function failed with
+%   "Index in position 1 exceeds array bounds. Index must not exceed 2067."
+% The original author must have used an stlread that did not merge points.
+%
+% The coordinates below were recovered from the unmerged list at exactly
+% those three indices, so they are the original intended landmarks, not a
+% re-pick. They are checked as anatomically consistent: the shoulders sit
+% on opposite sides in X at near-equal height, and the chin is near the
+% midline, above the shoulders, and at the anterior extreme.
+%
+% Storing coordinates and resolving them to the nearest vertex at run time
+% makes this robust to vertex merging, vertex reordering, and any change of
+% STL reader — none of which preserve indices, all of which preserve
+% geometry.
+%
+% DO NOT REPLACE THIS WITH INDICES FOR THE MERGED LIST. Merging does not
+% define an ordering, so the index depends on the reader: for these same
+% three points MATLAB's stlread yields 574, 1544 and 178, while a
+% sorted-unique merge (e.g. numpy) yields 2031, 16 and 995. Only the
+% coordinates are stable.
 
-torso_fids = [torso.vertices(3104,:);
-              torso.vertices(8807,:);
-              torso.vertices(858,:)];
-              % torso.vertices(5556,:)];
+torso_fid_ref = [ ...
+     2.0898,   0.2269,  -0.4374;   % Left shoulder
+    -1.8253,   0.0529,  -0.2542;   % Right shoulder
+     0.1836,   1.1304,   1.2111];  % Chin
+
+% Resolve to vertex indices ONCE, on the untransformed mesh. The indices
+% are then reused after each transform, since a transform moves vertices
+% but never reorders them.
+fid_idx = zeros(3,1);
+fid_err = zeros(3,1);
+for f = 1:3
+    d = vecnorm(torso.vertices - torso_fid_ref(f,:), 2, 2);
+    [fid_err(f), fid_idx(f)] = min(d);
+end
+
+% Guard against a swapped-in mesh. The reference points are vertices of the
+% shipped canonical_torso.stl, quoted to 4 decimal places against float32
+% STL storage, so the residual is ~5e-5 on a mesh of extent ~8 (relative
+% ~9e-6). Anything materially larger means the mesh has changed and the
+% landmarks are no longer the intended ones.
+mesh_scale = max(max(torso.vertices) - min(torso.vertices));
+if max(fid_err) > 1e-4 * mesh_scale
+    warning('cr_register_torso:fiducialMismatch', ...
+        ['Canonical torso fiducials did not match a mesh vertex exactly ' ...
+         '(worst offset %.3g, mesh extent %.3g). canonical_torso.stl may ' ...
+         'have been replaced. Re-derive torso_fid_ref before trusting the ' ...
+         'registration.'], max(fid_err), mesh_scale);
+end
+
+torso_fids = torso.vertices(fid_idx, :);
+
 % Step 1: Normalize units between subject and canonical torso
 sf = determine_body_scan_units(S.fiducials, torso_fids);
 M0 = diag([sf, sf, sf, 1]); % Scaling matrix
 
-torso.vertices = (M0 * [torso.vertices, ones(size(torso.vertices,1),1)]')'; 
+torso.vertices = (M0 * [torso.vertices, ones(size(torso.vertices,1),1)]')';
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
 
-torso_fids = [torso.vertices(3104,:);
-              torso.vertices(8807,:);
-              torso.vertices(858,:)];
-              % torso.vertices(5556,:)]; % Update fiducials after scaling
+torso_fids = torso.vertices(fid_idx, :); % Update fiducials after scaling
 
 % Step 2: Rigid body transform based on fiducial alignment
 M1 = spm_eeg_inv_rigidreg(S.fiducials', torso_fids');
 torso.vertices = (M1 * [torso.vertices, ones(size(torso.vertices,1),1)]')';
 torso.vertices = torso.vertices(:,1:3); % Remove homogenous coordinates
 
-torso_fids = [torso.vertices(3104,:);
-              torso.vertices(8807,:);
-              torso.vertices(858,:)];
-              % torso.vertices(5556,:)];% Update fiducials
+torso_fids = torso.vertices(fid_idx, :); % Update fiducials
 
 % Step 3: ICP Refinement
 [~, D] = knnsearch(S.subject.vertices, torso.vertices);

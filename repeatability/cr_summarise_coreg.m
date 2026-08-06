@@ -111,19 +111,61 @@ Stats.translation_sd = std(Stats.translation, 0, 1);
 Stats.scale_sd       = std(Stats.scale,       0, 1);
 Stats.euler_sd_deg   = std(Stats.euler_deg,   0, 1);
 
-% Geometry-level displacement: how far do the corners of a 200 mm cube
-% centred on the model move, repeat vs mean transform?
-probe = 100 * [ 1  1  1; 1  1 -1; 1 -1  1; 1 -1 -1;
-               -1  1  1; -1  1 -1; -1 -1  1; -1 -1 -1];
-T_mean = mean(cat(3, R.transforms{:}), 3);
-disp_mm = zeros(n, 1);
-for k = 1:n
-    p1 = apply_T(R.transforms{k}, probe);
-    p0 = apply_T(T_mean,          probe);
-    disp_mm(k) = max(vecnorm(p1 - p0, 2, 2));
+% Geometry-level displacement.
+%
+% Measured on the ACTUAL canonical torso vertices, not on an arbitrary
+% probe cube. The transforms map canonical space (where the torso spans
+% only about 8 units) to subject space, and they carry a scale factor of
+% order 100. A probe sized in millimetres would therefore sit tens of
+% metres from the origin once transformed, and a couple of degrees of
+% rotation at that radius produces displacements of hundreds of
+% millimetres that say nothing about the anatomy. Probing the real mesh
+% keeps the number interpretable: it is how far the model itself moves.
+%
+% Computed PAIRWISE between repeats rather than against a mean transform.
+% An elementwise mean of 4x4 matrices is not a valid mean of rigid
+% transforms, and the pairwise form answers the question directly: how far
+% apart are two independent coregistrations of the same subject?
+
+probe = canonical_probe_points();
+
+disp_pairwise = [];
+for a = 1:n
+    for b = a+1:n
+        pa = apply_T(R.transforms{a}, probe);
+        pb = apply_T(R.transforms{b}, probe);
+        d  = vecnorm(pa - pb, 2, 2);
+        disp_pairwise(end+1, :) = [max(d), median(d)]; %#ok<AGROW>
+    end
 end
-Stats.max_vertex_disp_mm = max(disp_mm);
-Stats.vertex_disp_mm     = disp_mm;
+
+Stats.pairwise_max_disp_mm    = disp_pairwise(:, 1);
+Stats.pairwise_median_disp_mm = disp_pairwise(:, 2);
+Stats.max_vertex_disp_mm      = max(disp_pairwise(:, 1));
+Stats.median_vertex_disp_mm   = median(disp_pairwise(:, 2));
+
+% Per-repeat displacement from the most central repeat, for the bar plot.
+% The most central repeat is the one with the smallest total pairwise
+% distance to all others — a genuine member of the set, unlike a mean.
+tot = zeros(n, 1);
+for a = 1:n
+    for b = 1:n
+        if a == b, continue; end
+        pa = apply_T(R.transforms{a}, probe);
+        pb = apply_T(R.transforms{b}, probe);
+        tot(a) = tot(a) + median(vecnorm(pa - pb, 2, 2));
+    end
+end
+[~, ref_rep] = min(tot);
+Stats.reference_repeat = ref_rep;
+
+disp_mm = zeros(n, 1);
+p_ref   = apply_T(R.transforms{ref_rep}, probe);
+for k = 1:n
+    pk = apply_T(R.transforms{k}, probe);
+    disp_mm(k) = median(vecnorm(pk - p_ref, 2, 2));
+end
+Stats.vertex_disp_mm = disp_mm;
 
 % REPORT
 
@@ -136,11 +178,16 @@ fprintf('\nResulting transform spread (SD across repeats):\n');
 fprintf('  Translation X/Y/Z : %6.2f %6.2f %6.2f mm\n', Stats.translation_sd);
 fprintf('  Rotation Z/Y/X    : %6.2f %6.2f %6.2f deg\n', Stats.euler_sd_deg);
 fprintf('  Scale X/Y/Z       : %6.4f %6.4f %6.4f\n',     Stats.scale_sd);
-fprintf('\nGeometry displacement:\n');
-fprintf('  Worst-case corner displacement vs mean transform : %6.2f mm\n', ...
+fprintf('\nGeometry displacement (canonical torso vertices, pairwise):\n');
+fprintf('  Median displacement between two repeats : %6.2f mm\n', ...
+    Stats.median_vertex_disp_mm);
+fprintf('  Worst-case vertex, worst pair           : %6.2f mm\n', ...
     Stats.max_vertex_disp_mm);
-fprintf('  Median across repeats                            : %6.2f mm\n', ...
-    median(disp_mm));
+fprintf('  Most central repeat                     : %d\n', Stats.reference_repeat);
+fprintf(['\n  This is the headline number: two independent manual\n' ...
+         '  coregistrations of the same subject place the model about\n' ...
+         '  %.0f mm apart. Report it alongside the fiducial RMS.\n'], ...
+    Stats.median_vertex_disp_mm);
 fprintf('\n');
 
 if do_plot
@@ -161,8 +208,8 @@ if do_plot
 
     subplot(1,3,3);
     bar(disp_mm, 'FaceColor', [0.2 0.4 0.8]); grid on;
-    xlabel('Repeat'); ylabel('Max corner displacement (mm)');
-    title('Geometry displacement vs mean');
+    xlabel('Repeat'); ylabel('Median vertex displacement (mm)');
+    title(sprintf('Displacement vs repeat %d (most central)', ref_rep));
     set(gca,'FontSize',11,'TickDir','out');
 end
 
@@ -175,6 +222,34 @@ function p = apply_T(T, pts)
 % Apply a 4x4 transform to [N x 3] points.
     p = (T * [pts, ones(size(pts,1),1)]')';
     p = p(:, 1:3);
+end
+
+function pts = canonical_probe_points()
+% Vertices of the canonical torso, in canonical space — the same space the
+% saved transforms take as input. Subsampled for speed; displacement
+% statistics do not need every vertex.
+%
+% Falls back to the canonical bounding box if the STL cannot be read, so a
+% missing mesh degrades the metric rather than erroring out of the whole
+% summary.
+    try
+        stl_data = stlread(fullfile(coreg_path, 'meshes', 'canonical_torso.stl'));
+        if isa(stl_data, 'triangulation')
+            V = stl_data.Points;
+        else
+            V = stl_data.vertices;
+        end
+        step = max(1, round(size(V,1) / 500));
+        pts  = V(1:step:end, :);
+    catch
+        warning('cr_summarise_coreg:noCanonicalMesh', ...
+            ['Could not read canonical_torso.stl — falling back to its ' ...
+             'bounding box. Displacement figures remain valid but coarser.']);
+        lo = [-1.953, -4.874, -1.070];
+        hi = [ 2.288,  3.139,  1.224];
+        [x,y,z] = ndgrid([lo(1) hi(1)], [lo(2) hi(2)], [lo(3) hi(3)]);
+        pts = [x(:), y(:), z(:)];
+    end
 end
 
 function e = rotm_to_euler_zyx(Rot)

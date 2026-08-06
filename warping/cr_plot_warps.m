@@ -26,9 +26,19 @@
 % WHAT TO LOOK FOR:
 %   - Warped outlines should look like plausible bodies: taller/narrower
 %     or shorter/wider, all still recognisably a torso
-%   - The cord should stay inside the torso in every warp
+%   - Each cord should sit inside the torso drawn in the SAME COLOUR
 %   - Scale factors should cluster around 1 with no axis collapsed
 %   - determinant should be ~1 for every warp when volume preservation is on
+%
+% WHY THE CORD CANNOT ESCAPE THE TORSO
+%   The warp is a single invertible affine map applied to every mesh, the
+%   source positions and the sensors alike. Affine maps preserve
+%   containment exactly: if the cord was inside the torso before warping it
+%   is inside afterwards, for any warp, with no tolerance argument needed.
+%   The containment test below is therefore a guard against a coding error
+%   (a mesh accidentally left untransformed), not against the warping
+%   itself. If it ever fails, look for an un-warped field in
+%   cr_build_warp_geometries rather than for a bad warp.
 %
 % SEE ALSO:
 %   cr_generate_warps, cr_build_warp_geometries
@@ -83,31 +93,47 @@ C0 = geom.mesh_wm.vertices;
 
 figure('Color','w','Name','Anatomical warp check','Position',[80 80 1400 620]);
 
+% The cord is warped by the SAME matrix as the torso, because
+% cr_build_warp_geometries applies M to every mesh, to sources_cent.pos and
+% to the sensors. Both must therefore be drawn warped, in matching colours.
+%
+% Drawing the UNWARPED cord against a WARPED torso — as an earlier version
+% of this figure did — makes the cord appear to escape the body on any warp
+% that shortens the torso, which is a drawing error, not a geometry error.
+
+cmap = parula(numel(show_idx));
+
 % PANEL 1: sagittal outlines (Y vs Z)
 subplot(1,3,1); hold on;
 plot_outline(V0(:,3), V0(:,2), [0 0 0], 2.5);
-cmap = parula(numel(show_idx));
+plot(C0(:,3), C0(:,2), '.', 'Color', [0 0 0], 'MarkerSize', 2);
 for i = 1:numel(show_idx)
-    V = apply_T(W.matrices{show_idx(i)}, V0);
+    M = W.matrices{show_idx(i)};
+    V = apply_T(M, V0);
+    C = apply_T(M, C0);
     plot_outline(V(:,3), V(:,2), cmap(i,:), 1.0);
+    plot(C(:,3), C(:,2), '.', 'Color', cmap(i,:), 'MarkerSize', 2);
 end
 axis equal; grid on;
 xlabel('Ventral-Dorsal (mm)'); ylabel('Rostral-Caudal (mm)');
-title(sprintf('Sagittal — %d of %d warps', numel(show_idx), n));
+title(sprintf('Sagittal — %d of %d warps\n(cord warped with its own torso)', ...
+    numel(show_idx), n));
 set(gca,'FontSize',11,'TickDir','out');
 
 % PANEL 2: coronal outlines (X vs Y)
 subplot(1,3,2); hold on;
 plot_outline(V0(:,1), V0(:,2), [0 0 0], 2.5);
+plot(C0(:,1), C0(:,2), '.', 'Color', [0 0 0], 'MarkerSize', 2);
 for i = 1:numel(show_idx)
-    V = apply_T(W.matrices{show_idx(i)}, V0);
+    M = W.matrices{show_idx(i)};
+    V = apply_T(M, V0);
+    C = apply_T(M, C0);
     plot_outline(V(:,1), V(:,2), cmap(i,:), 1.0);
+    plot(C(:,1), C(:,2), '.', 'Color', cmap(i,:), 'MarkerSize', 2);
 end
-% Cord, original vs warped, to confirm containment
-plot(C0(:,1), C0(:,2), '.', 'Color', [0.8 0 0], 'MarkerSize', 2);
 axis equal; grid on;
 xlabel('Left-Right (mm)'); ylabel('Rostral-Caudal (mm)');
-title('Coronal (black = original, red = cord)');
+title('Coronal (black = original torso and cord)');
 set(gca,'FontSize',11,'TickDir','out');
 
 % PANEL 3: scale factors and determinants

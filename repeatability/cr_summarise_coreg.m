@@ -177,7 +177,16 @@ fprintf('  SD per fiducial (LS, RS, chin)       : %6.2f %6.2f %6.2f mm\n', ...
 fprintf('\nResulting transform spread (SD across repeats):\n');
 fprintf('  Translation X/Y/Z : %6.2f %6.2f %6.2f mm\n', Stats.translation_sd);
 fprintf('  Rotation Z/Y/X    : %6.2f %6.2f %6.2f deg\n', Stats.euler_sd_deg);
-fprintf('  Scale X/Y/Z       : %6.4f %6.4f %6.4f\n',     Stats.scale_sd);
+
+% Report scale as a PERCENTAGE of its own mean. The absolute SD is
+% meaningless on its own: the transform carries a unit-conversion factor of
+% order 100, so an SD of 1.6 is a 1.6% variation, not a large one. Printing
+% the bare SD invites exactly that misreading.
+Stats.scale_mean   = mean(Stats.scale, 1);
+Stats.scale_sd_pct = 100 * Stats.scale_sd ./ Stats.scale_mean;
+fprintf('  Scale X/Y/Z       : %6.2f %6.2f %6.2f  (mean)\n', Stats.scale_mean);
+fprintf('                      %6.2f %6.2f %6.2f  %% of mean (SD)\n', ...
+    Stats.scale_sd_pct);
 fprintf('\nGeometry displacement (canonical torso vertices, pairwise):\n');
 fprintf('  Median displacement between two repeats : %6.2f mm\n', ...
     Stats.median_vertex_disp_mm);

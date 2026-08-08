@@ -144,18 +144,20 @@ elseif opts.verbose
     fprintf('Kept %s\n', poly);
 end
 
-% VALIDATE THAT TETGEN ACTUALLY RAN
+% VERDICT COMES FROM TETGEN, NOT FROM MY PARSER
 %
-% A failed invocation produces no parseable collisions, which is exactly
-% what a clean geometry produces. Reporting "ok" in that case is worse than
-% useless — it is a false all-clear on a geometry that will fail the FEM.
-% So a clean verdict requires POSITIVE evidence that TetGen inspected the
-% file, not merely the absence of complaints.
-found_int = contains(out, 'PLC Error') || ...
-            contains(lower(out), 'self-intersection');
-ran_ok    = contains(out, 'Delaunizing') || contains(out, 'Opening');
+% Two separate questions, and conflating them has now caused two false
+% all-clears:
+%   1. Did TetGen inspect the file?   -> if not, ERROR. Never "clean".
+%   2. Did it find intersections?     -> read its own explicit statement.
+% Whether the per-collision DETAILS parse is a third, lesser question. The
+% detail format differs between the PLC Error block emitted while meshing
+% and the -d report, so a regex miss must never turn a dirty geometry into
+% a clean verdict.
+ran_ok = contains(out, 'Delaunizing') || ...
+         contains(out, 'Detecting self-intersecting');
 
-if ~found_int && ~ran_ok
+if ~ran_ok
     error('cr_find_intersections:tetgenFailed', ...
         ['TetGen did not produce interpretable output (exit status %d), ' ...
          'so no conclusion can be drawn about intersections.\n' ...
@@ -163,49 +165,72 @@ if ~found_int && ~ran_ok
         status, exe, poly, out);
 end
 
-R_raw = out;
-
-
-% PARSE AND MAP BACK
+% TetGen says this verbatim when the surfaces are clean. Note that the
+% string 'self-intersection' also appears in its TIMING line on a clean
+% run, so matching that would flag every geometry.
+is_clean = contains(out, 'No faces are intersecting');
 
 I = struct('mesh_a',{},'comp_a',{},'mesh_b',{},'comp_b',{},'point',{});
 
-% Both wordings TetGen uses
-pts  = regexp(out, 'intersect at point \(([^)]*)\)', 'tokens');
-segs = regexp(out, 'Segment:\s*\[(\d+),(\d+)\]', 'tokens');
-facs = regexp(out, 'Facet:\s*\[(\d+),(\d+),(\d+)\]', 'tokens');
-fac2 = regexp(out, 'Facet 1:\s*\[(\d+),(\d+),(\d+)\]', 'tokens');
-if isempty(facs) && ~isempty(fac2), facs = fac2; end
+if is_clean
+    if opts.verbose
+        fprintf('\nTetGen inspected the file and found no self-intersections.\n\n');
+    end
+    return;
+end
 
-n = max([numel(segs), numel(facs)]);
+
+% PARSE THE DETAILS, BEST EFFORT
+%
+% Index triples are pulled from any line that mentions intersection,
+% whatever brackets TetGen used, so this survives format differences
+% between versions. If nothing parses, the geometry is still reported as
+% dirty — with the raw output attached so it can be read by eye.
+
+pts   = regexp(out, 'intersect\w* at point \(([^)]*)\)', 'tokens');
+lines = strsplit(out, newline);
+hits  = lines(contains(lower(lines), 'ntersect') & ...
+              ~contains(lines, 'No faces'));
+
+groups = {};
+for k = 1:numel(hits)
+    g = regexp(hits{k}, '[\[\(]\s*(\d+\s*,\s*){1,2}\d+\s*[\]\)]', 'match');
+    for j = 1:numel(g)
+        v = sscanf(strrep(strrep(strrep(g{j},'[',''),']',''),',',' '), '%f')';
+        if numel(v) >= 2, groups{end+1} = v; end %#ok<AGROW>
+    end
+end
+
+n = floor(numel(groups) / 2);
 for k = 1:min(n, opts.max_report)
-    a_idx = [];
-    if k <= numel(segs), a_idx = str2double(segs{k}); end
-    b_idx = [];
-    if k <= numel(facs), b_idx = str2double(facs{k}); end
-    if isempty(a_idx) || isempty(b_idx), continue; end
-
-    [na, ca] = describe(a_idx, owner_name, owner_comp);
-    [nb, cb] = describe(b_idx, owner_name, owner_comp);
-
+    [na, ca] = describe(groups{2*k-1}, owner_name, owner_comp);
+    [nb, cb] = describe(groups{2*k},   owner_name, owner_comp);
     if k <= numel(pts)
         pt = sscanf(strrep(pts{k}{1}, ',', ' '), '%f')';
     else
         pt = [NaN NaN NaN];
     end
-
+    if numel(pt) ~= 3, pt = [NaN NaN NaN]; end
     I(end+1) = struct('mesh_a', na, 'comp_a', ca, ...
                       'mesh_b', nb, 'comp_b', cb, 'point', pt); %#ok<AGROW>
 end
 
+if isempty(I)
+    % Dirty, but the detail format was not recognised. Report it as dirty
+    % anyway — this is the case that previously came back "ok".
+    n = NaN;
+    I(1) = struct('mesh_a', '(unparsed)', 'comp_a', NaN, ...
+                  'mesh_b', '(unparsed)', 'comp_b', NaN, ...
+                  'point', [NaN NaN NaN]);
+end
+
+R_raw = out;
+
 if opts.verbose
-    if isempty(I)
-        if found_int
-            fprintf(['\nTetGen reported a self-intersection but none could ' ...
-                     'be parsed. Raw output:\n%s\n'], out);
-        else
-            fprintf('\nTetGen inspected the file and found no self-intersections.\n');
-        end
+    if strcmp(I(1).mesh_a, '(unparsed)')
+        fprintf(['\nTetGen found self-intersections, but the detail format ' ...
+                 'was not\nrecognised so the meshes cannot be named. ' ...
+                 'Raw output:\n%s\n'], out);
     else
         fprintf('\n%d collision(s) reported', n);
         if n > opts.max_report
@@ -218,7 +243,6 @@ if opts.verbose
                 label(I(k).mesh_b, I(k).comp_b), I(k).point);
         end
 
-        % The pair that matters is usually obvious from a tally
         pairs = arrayfun(@(x) sprintf('%s x %s', ...
             label(x.mesh_a, x.comp_a), label(x.mesh_b, x.comp_b)), ...
             I, 'UniformOutput', false);
@@ -231,9 +255,7 @@ if opts.verbose
         end
         fprintf(['\nA rigid or affine transform cannot create a collision ' ...
                  'that\nwas not already there, so if these meshes overlap ' ...
-                 'here they\noverlap in the base geometry too. Check the ' ...
-                 'unmodified model\nbefore blaming the coregistration or ' ...
-                 'the warp.\n']);
+                 'here they\noverlap in the base geometry too.\n']);
     end
     fprintf('\n');
 end

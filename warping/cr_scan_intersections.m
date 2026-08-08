@@ -101,6 +101,13 @@ for k = 1:numel(d)
 
         if isempty(I)
             e.ok = true; e.n_int = 0;
+        elseif strcmp(I(1).mesh_a, '(unparsed)')
+            % TetGen found intersections but the detail format was not
+            % recognised. Still a failure — this is the case that used to
+            % come back clean.
+            e.ok = false; e.n_int = NaN;
+            e.top_pair = '(intersections found, meshes not identified)';
+            e.I = I;
         else
             if isfield(I, 'n_total') && ~isempty(I(1).n_total)
                 e.n_int = I(1).n_total;

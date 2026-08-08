@@ -7,6 +7,15 @@ function R = cr_check_geometry(geom, opts)
 % with no indication of which mesh is at fault. This runs the checks TetGen
 % cares about, cheaply, BEFORE committing hours to a solve.
 %
+% CALIBRATE AGAINST A GEOMETRY THAT WORKS
+%   Absolute thresholds for "too thin a triangle" are guesswork. TetGen
+%   accepts far worse than intuition suggests — the coregistration
+%   geometries in this study contain faces down to 0.12 degrees and mesh
+%   without complaint, because TetGen inserts Steiner points rather than
+%   refusing. So pass opts.ref_mesh from a geometry you have ALREADY
+%   tetrahedralised successfully, and read the output as "worse than the
+%   one that worked", not as an absolute verdict.
+%
 % WHAT ACTUALLY BREAKS AFTER AN AFFINE WARP
 %   cr_build_warp_geometries applies ONE affine transform to every mesh, so
 %   nesting is preserved by construction: an affine map cannot move the cord
@@ -36,14 +45,22 @@ function R = cr_check_geometry(geom, opts)
 %                    geometry's own units (default [] = report only)
 %     .check_selfint run iso2mesh self-intersection test (default true)
 %     .check_nesting run point-in-surface nesting test (default true)
-%     .max_probe     vertices sampled per mesh for nesting (default 1000)
+%     .max_probe     vertices sampled per mesh for nesting (default 200)
+%     .ref_mesh      per-mesh stats from a geometry KNOWN to tetrahedralise
+%                    (the .mesh field of an earlier result). Quality is then
+%                    judged relative to it instead of against absolute
+%                    thresholds. Strongly recommended — see below.
+%     .ref_angle_tol flag if min angle is below ref * this (default 0.5)
+%     .ref_sliver_tol flag if sliver count exceeds ref * this (default 3)
 %     .verbose       print a report (default true)
 %
 % OUTPUT:
 %   R - struct with:
 %     .ok           true if nothing fatal was found
-%     .fatal        cell array of problems that will stop TetGen
-%     .warnings     cell array of problems worth looking at
+%     .fatal        problems that will genuinely stop TetGen
+%     .warnings     things worth looking at, including quality that is much
+%                   worse than the reference geometry
+%     .quality      sliver counts per mesh — informational, never fatal
 %     .mesh         per-mesh struct array: name, n_vert, n_face, min_angle,
 %                   n_slivers, n_degenerate, closed, n_open_edges, euler,
 %                   volume, selfint
@@ -88,7 +105,10 @@ if ~isfield(opts,'min_angle_deg'),  opts.min_angle_deg  = 1.0;   end
 if ~isfield(opts,'min_gap'),        opts.min_gap        = [];    end
 if ~isfield(opts,'check_selfint'),  opts.check_selfint  = true;  end
 if ~isfield(opts,'check_nesting'),  opts.check_nesting  = true;  end
-if ~isfield(opts,'max_probe'),      opts.max_probe      = 1000;  end
+if ~isfield(opts,'max_probe'),      opts.max_probe      = 200;   end
+if ~isfield(opts,'ref_mesh'),       opts.ref_mesh       = [];    end
+if ~isfield(opts,'ref_angle_tol'),  opts.ref_angle_tol  = 0.5;   end
+if ~isfield(opts,'ref_sliver_tol'), opts.ref_sliver_tol = 3;     end
 if ~isfield(opts,'verbose'),        opts.verbose        = true;  end
 if ~isfield(opts,'nested')
     opts.nested = setdiff(opts.meshes, {opts.outer}, 'stable');
@@ -96,6 +116,7 @@ end
 
 R.fatal    = {};
 R.warnings = {};
+R.quality  = {};
 R.mesh     = struct('name',{},'n_vert',{},'n_face',{},'min_angle',{}, ...
                     'n_slivers',{},'n_degenerate',{},'closed',{}, ...
                     'n_open_edges',{},'euler',{},'volume',{},'selfint',{});
@@ -103,6 +124,7 @@ R.mesh     = struct('name',{},'n_vert',{},'n_face',{},'min_angle',{}, ...
 present = opts.meshes(cellfun(@(m) isfield(geom, m), opts.meshes));
 if isempty(present)
     R.ok = false;
+    R.gaps = struct('a',{},'b',{},'min_dist',{});
     R.fatal{end+1} = 'No mesh_* fields found in this geometry.';
     if opts.verbose, fprintf('%s\n', R.fatal{end}); end
     return;
@@ -151,12 +173,36 @@ for m = 1:numel(present)
                'volume', volume, 'selfint', selfint);
 
     % Verdicts
+    %
+    % FATAL means "TetGen will refuse this". Sliver triangles are NOT in that
+    % category: the coregistration geometries carry faces down to 0.12 deg
+    % and tetrahedralise perfectly well, because TetGen inserts Steiner
+    % points rather than giving up. Treating slivers as fatal flagged every
+    % known-good geometry in the set, so they are reported as QUALITY and
+    % only escalate when they are much worse than a reference geometry that
+    % is known to mesh (opts.ref_mesh).
     if n_degenerate > 0
         R.fatal{end+1} = sprintf('%s: %d zero-area faces', name, n_degenerate);
     end
     if n_slivers > 0
-        R.fatal{end+1} = sprintf('%s: %d faces with an angle below %.2f deg (min %.4f)', ...
+        R.quality{end+1} = sprintf('%s: %d faces below %.2f deg (min %.4f)', ...
             name, n_slivers, opts.min_angle_deg, min_angle);
+    end
+    if ~isempty(opts.ref_mesh)
+        ri = find(strcmp({opts.ref_mesh.name}, name), 1);
+        if ~isempty(ri)
+            rs = opts.ref_mesh(ri);
+            if min_angle < rs.min_angle * opts.ref_angle_tol
+                R.warnings{end+1} = sprintf(...
+                    '%s: min angle %.4f deg is %.1fx worse than the reference (%.4f)', ...
+                    name, min_angle, rs.min_angle / max(min_angle, eps), rs.min_angle);
+            end
+            if n_slivers > max(rs.n_slivers * opts.ref_sliver_tol, rs.n_slivers + 5)
+                R.warnings{end+1} = sprintf(...
+                    '%s: %d slivers vs %d in the reference', ...
+                    name, n_slivers, rs.n_slivers);
+            end
+        end
     end
     if ~closed
         R.fatal{end+1} = sprintf('%s: surface not closed, %d non-manifold edges', ...
@@ -367,8 +413,10 @@ function in = points_inside(P, V, F)
     Br = reshape(B, 1, nF, 3);
     Cr = reshape(C, 1, nF, 3);
 
-    % Keep each chunk's temporaries near 2e6 elements
-    chunk = max(1, floor(2e6 / nF));
+    % Keep each chunk's temporaries small. The intermediates are
+    % nPoints x nFaces x 3 and there are about ten of them live at once, so
+    % a generous budget here thrashes memory rather than going faster.
+    chunk = max(1, floor(2e5 / nF));
 
     for i0 = 1:chunk:nP
         idx = i0:min(i0 + chunk - 1, nP);
@@ -413,16 +461,22 @@ function print_report(R, opts)
     if isempty(R.fatal)
         fprintf('\nPASS — nothing here should stop TetGen.\n');
     else
-        fprintf('\nFAIL — %d problem(s):\n', numel(R.fatal));
+        fprintf('\nFAIL — %d blocking problem(s):\n', numel(R.fatal));
         for k = 1:numel(R.fatal), fprintf('  [FATAL] %s\n', R.fatal{k}); end
     end
     for k = 1:numel(R.warnings), fprintf('  [warn ] %s\n', R.warnings{k}); end
+    for k = 1:numel(R.quality),  fprintf('  [qual ] %s\n', R.quality{k});  end
 
+    if ~isempty(R.quality) && isempty(opts.ref_mesh)
+        fprintf(['\nSliver counts above are informational. TetGen tolerates\n' ...
+                 'very thin triangles, so they only matter in comparison:\n' ...
+                 'pass opts.ref_mesh from a geometry you have already meshed\n' ...
+                 'successfully to see whether these are unusually bad.\n']);
+    end
     if ~isempty(R.fatal)
-        fprintf(['\nMost slivers after an affine warp come from the warp\n' ...
-                 'amplifying triangles that were already elongated. Try\n' ...
-                 'cr_repair_geometry, which remeshes each surface at a fixed\n' ...
-                 'edge length and re-runs these checks.\n']);
+        fprintf(['\nIf the blocking problems are quality-related, try\n' ...
+                 'cr_repair_geometry, which remeshes each surface and\n' ...
+                 're-runs these checks.\n']);
     end
     fprintf('\n');
 end

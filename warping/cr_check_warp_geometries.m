@@ -17,13 +17,22 @@ function T = cr_check_warp_geometries(S)
 % INPUT:
 %   S - struct:
 %     .dir       (required) folder holding the geometry .mat files
+%     .reference a geometry KNOWN to tetrahedralise (filename in .dir, or a
+%                full path). Everything else is judged against it. Without
+%                this you get absolute thresholds, which flag geometries
+%                that mesh perfectly well.
 %     .pattern   file mask (default 'geometries_*.mat')
 %     .opts      options passed through to cr_check_geometry
 %     .csv       path to write a summary CSV (default: <dir>/geometry_check.csv)
 %
 % OUTPUT:
-%   T - struct array, one per file: name, ok, n_fatal, min_angle, worst_mesh,
-%       first_problem
+%   T - struct array, one per file: name, ok, n_fatal, n_warn, min_angle,
+%       worst_mesh, first_problem
+%
+% USAGE WITH A REFERENCE:
+%   S.dir       = 'D:\...\geometries';
+%   S.reference = 'geometries_coreg_rep01_cont.mat';   % this one meshed
+%   T = cr_check_warp_geometries(S);
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -44,12 +53,28 @@ if isempty(d)
     error('No files matching %s in %s', S.pattern, S.dir);
 end
 
-fprintf('=== Checking %d geometries ===\n\n', numel(d));
-fprintf('%-42s %6s %8s %10s %-16s\n', 'file', 'ok', 'fatals', 'min angle', 'worst mesh');
-fprintf('%s\n', repmat('-', 1, 88));
+% REFERENCE GEOMETRY
+% Absolute quality thresholds are guesswork — TetGen accepts far thinner
+% triangles than intuition suggests. Point S.reference at a geometry you
+% have ALREADY tetrahedralised successfully and every other geometry is
+% judged against it, which is the only calibration that means anything.
+if isfield(S,'reference') && ~isempty(S.reference)
+    ref = S.reference;
+    if ~isfile(ref), ref = fullfile(S.dir, ref); end
+    fprintf('Reference (known to mesh): %s\n', ref);
+    ro = S.opts; ro.verbose = false; ro.ref_mesh = [];
+    Rref = cr_check_geometry(ref, ro);
+    S.opts.ref_mesh = Rref.mesh;
+    fprintf('  reference worst angle: %.4f deg\n\n', min([Rref.mesh.min_angle]));
+end
 
-T = struct('name',{},'ok',{},'n_fatal',{},'min_angle',{},'worst_mesh',{}, ...
-           'first_problem',{});
+fprintf('=== Checking %d geometries ===\n\n', numel(d));
+fprintf('%-42s %6s %8s %8s %10s %-16s\n', ...
+    'file', 'ok', 'fatals', 'warns', 'min angle', 'worst mesh');
+fprintf('%s\n', repmat('-', 1, 96));
+
+T = struct('name',{},'ok',{},'n_fatal',{},'n_warn',{},'min_angle',{}, ...
+           'worst_mesh',{},'first_problem',{});
 
 for k = 1:numel(d)
     f = fullfile(d(k).folder, d(k).name);
@@ -57,10 +82,10 @@ for k = 1:numel(d)
         R = cr_check_geometry(f, S.opts);
     catch err
         T(end+1) = struct('name', d(k).name, 'ok', false, 'n_fatal', NaN, ...
-            'min_angle', NaN, 'worst_mesh', '', ...
+            'n_warn', NaN, 'min_angle', NaN, 'worst_mesh', '', ...
             'first_problem', ['check errored: ' err.message]); %#ok<AGROW>
-        fprintf('%-42s %6s %8s %10s %-16s\n', d(k).name, 'ERR', '-', '-', '-');
-        fprintf('%50s %s\n', '', err.message);
+        fprintf('%-42s %6s %8s %8s %10s %-16s\n', d(k).name, 'ERR', '-', '-', '-', '-');
+        fprintf('%52s %s\n', '', err.message);
         if k == 1
             % A failure on the very first file is almost always a bug in the
             % checker or a wrong path, not 100 bad geometries. Show where.
@@ -83,13 +108,15 @@ for k = 1:numel(d)
     if isempty(R.fatal), fp = ''; else, fp = R.fatal{1}; end
 
     T(end+1) = struct('name', d(k).name, 'ok', R.ok, ...
-        'n_fatal', numel(R.fatal), 'min_angle', ma, 'worst_mesh', wm, ...
-        'first_problem', fp); %#ok<AGROW>
+        'n_fatal', numel(R.fatal), 'n_warn', numel(R.warnings), ...
+        'min_angle', ma, 'worst_mesh', wm, 'first_problem', fp); %#ok<AGROW>
 
-    fprintf('%-42s %6s %8d %10.4f %-16s\n', d(k).name, ...
-        yesno(R.ok), numel(R.fatal), ma, wm);
+    fprintf('%-42s %6s %8d %8d %10.4f %-16s\n', d(k).name, ...
+        yesno(R.ok), numel(R.fatal), numel(R.warnings), ma, wm);
     if ~R.ok
-        fprintf('%50s %s\n', '', fp);
+        fprintf('%52s %s\n', '', fp);
+    elseif ~isempty(R.warnings)
+        fprintf('%52s %s\n', '', R.warnings{1});
     end
 end
 
@@ -98,10 +125,11 @@ fprintf('\n%d of %d geometries pass (%d would fail TetGen).\n', ...
     n_ok, numel(T), numel(T) - n_ok);
 
 fid = fopen(S.csv, 'w');
-fprintf(fid, 'file,ok,n_fatal,min_angle_deg,worst_mesh,first_problem\n');
+fprintf(fid, 'file,ok,n_fatal,n_warn,min_angle_deg,worst_mesh,first_problem\n');
 for k = 1:numel(T)
-    fprintf(fid, '%s,%d,%g,%.6f,%s,"%s"\n', T(k).name, T(k).ok, ...
-        T(k).n_fatal, T(k).min_angle, T(k).worst_mesh, T(k).first_problem);
+    fprintf(fid, '%s,%d,%g,%g,%.6f,%s,"%s"\n', T(k).name, T(k).ok, ...
+        T(k).n_fatal, T(k).n_warn, T(k).min_angle, T(k).worst_mesh, ...
+        T(k).first_problem);
 end
 fclose(fid);
 fprintf('Summary written to %s\n', S.csv);

@@ -112,56 +112,63 @@ for m = 1:numel(present)
     name = present{m};
     [V, F] = get_mesh(geom.(name));
 
-    S = struct('name', name, 'n_vert', size(V,1), 'n_face', size(F,1));
-
     % Triangle angles. Slivers — very small minimum angle — are what makes
     % TetGen give up, and anisotropic scaling manufactures them.
     [ang_min, area] = tri_quality(V, F);
-    S.min_angle    = min(ang_min);
-    S.n_slivers    = sum(ang_min < opts.min_angle_deg);
-    S.n_degenerate = sum(area < eps(max(area)) * 1e3);
+    min_angle    = min(ang_min);
+    n_slivers    = sum(ang_min < opts.min_angle_deg);
+    n_degenerate = sum(area < eps(max(area)) * 1e3);
 
     % Edge manifoldness: every edge of a closed surface is in exactly 2 faces
     E  = sort([F(:,[1 2]); F(:,[2 3]); F(:,[3 1])], 2);
     [~, ~, ic] = unique(E, 'rows');
     cnt = accumarray(ic, 1);
-    S.n_open_edges = sum(cnt ~= 2);
-    S.closed       = S.n_open_edges == 0;
-    S.euler        = size(V,1) - numel(cnt) + size(F,1);
-    S.volume       = mesh_volume(V, F);
+    n_open_edges = sum(cnt ~= 2);
+    closed       = n_open_edges == 0;
+    euler        = size(V,1) - numel(cnt) + size(F,1);
+    volume       = mesh_volume(V, F);
 
-    S.selfint = NaN;
+    selfint = NaN;
     if opts.check_selfint && exist('meshcheckrepair','file') == 2
         try
-            evalc('[~, fi] = meshcheckrepair(V, F, ''intersect'');');
-            S.selfint = size(fi,1) < size(F,1);   % faces removed => had them
+            [~, fi] = evalc('mcr_intersect(V, F)');
+            selfint = size(fi,1) < size(F,1);   % faces removed => had them
         catch
-            S.selfint = NaN;
+            selfint = NaN;
         end
     end
 
+    % Built in ONE call, in the same field order R.mesh was declared with.
+    % Assigning a struct whose fields are in a different order into a struct
+    % array is an error in MATLAB, not a silent reorder.
+    S = struct('name', name, 'n_vert', size(V,1), 'n_face', size(F,1), ...
+               'min_angle', min_angle, 'n_slivers', n_slivers, ...
+               'n_degenerate', n_degenerate, 'closed', closed, ...
+               'n_open_edges', n_open_edges, 'euler', euler, ...
+               'volume', volume, 'selfint', selfint);
+
     % Verdicts
-    if S.n_degenerate > 0
-        R.fatal{end+1} = sprintf('%s: %d zero-area faces', name, S.n_degenerate);
+    if n_degenerate > 0
+        R.fatal{end+1} = sprintf('%s: %d zero-area faces', name, n_degenerate);
     end
-    if S.n_slivers > 0
+    if n_slivers > 0
         R.fatal{end+1} = sprintf('%s: %d faces with an angle below %.2f deg (min %.4f)', ...
-            name, S.n_slivers, opts.min_angle_deg, S.min_angle);
+            name, n_slivers, opts.min_angle_deg, min_angle);
     end
-    if ~S.closed
+    if ~closed
         R.fatal{end+1} = sprintf('%s: surface not closed, %d non-manifold edges', ...
-            name, S.n_open_edges);
+            name, n_open_edges);
     end
-    if S.euler ~= 2 && S.closed
+    if euler ~= 2 && closed
         R.warnings{end+1} = sprintf('%s: Euler characteristic %d (a sphere is 2) — genus %g', ...
-            name, S.euler, (2 - S.euler)/2);
+            name, euler, (2 - euler)/2);
     end
-    if isequal(S.selfint, true)
+    if isequal(selfint, true)
         R.fatal{end+1} = sprintf('%s: surface self-intersects', name);
     end
-    if S.volume <= 0
+    if volume <= 0
         R.warnings{end+1} = sprintf('%s: signed volume %.4g — face winding may be inverted', ...
-            name, S.volume);
+            name, volume);
     end
 
     R.mesh(end+1) = S; %#ok<AGROW>
@@ -386,6 +393,11 @@ function print_report(R, opts)
                  'edge length and re-runs these checks.\n']);
     end
     fprintf('\n');
+end
+
+function [V, F] = mcr_intersect(V, F)
+% Wrapper so evalc can suppress meshfix's console chatter with a plain call.
+    [V, F] = meshcheckrepair(V, F, 'intersect');
 end
 
 function s = yesno(b)

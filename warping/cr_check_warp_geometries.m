@@ -60,6 +60,16 @@ for k = 1:numel(d)
             'min_angle', NaN, 'worst_mesh', '', ...
             'first_problem', ['check errored: ' err.message]); %#ok<AGROW>
         fprintf('%-42s %6s %8s %10s %-16s\n', d(k).name, 'ERR', '-', '-', '-');
+        fprintf('%50s %s\n', '', err.message);
+        if k == 1
+            % A failure on the very first file is almost always a bug in the
+            % checker or a wrong path, not 100 bad geometries. Show where.
+            fprintf('\n  First file errored — stack:\n');
+            for s = 1:min(3, numel(err.stack))
+                fprintf('    %s line %d\n', err.stack(s).name, err.stack(s).line);
+            end
+            fprintf('\n');
+        end
         continue;
     end
 

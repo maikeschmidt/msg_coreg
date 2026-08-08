@@ -111,10 +111,16 @@ poly = mwpath('cr_intersect_check.poly');
 fid  = fopen(poly, 'w');
 fprintf(fid, '#node list\n%d 3 0 0\n', size(V,1));
 fprintf(fid, '%d %.17g %.17g %.17g\n', [(1:size(V,1))', V]');
+% Facet section. The header's second number declares whether boundary
+% markers are present; it is 0 here, so each facet is exactly
+%   <#polygons> <#holes>
+%   <#corners> <corner indices>
+% Writing a third number on the first line — a marker the header said was
+% absent — desynchronises TetGen's parser and it rejects the file, which is
+% then indistinguishable from "no intersections found" unless the run is
+% validated. See the status check below.
 fprintf(fid, '#facet list\n%d 0\n', size(F,1));
-for k = 1:size(F,1)
-    fprintf(fid, '1 0 0\n3 %d %d %d\n', F(k,1), F(k,2), F(k,3));
-end
+fprintf(fid, '1 0\n3 %d %d %d\n', F');
 fprintf(fid, '#hole list\n0\n#region list\n0\n');
 fclose(fid);
 
@@ -130,13 +136,34 @@ if isempty(exe)
     error('Could not locate a TetGen binary via mcpath.');
 end
 
-[~, out] = system(sprintf(' "%s" -d "%s"', exe, poly));
+[status, out] = system(sprintf(' "%s" -d "%s"', exe, poly));
 
 if ~opts.keep_poly
     delete(poly);
 elseif opts.verbose
     fprintf('Kept %s\n', poly);
 end
+
+% VALIDATE THAT TETGEN ACTUALLY RAN
+%
+% A failed invocation produces no parseable collisions, which is exactly
+% what a clean geometry produces. Reporting "ok" in that case is worse than
+% useless — it is a false all-clear on a geometry that will fail the FEM.
+% So a clean verdict requires POSITIVE evidence that TetGen inspected the
+% file, not merely the absence of complaints.
+found_int = contains(out, 'PLC Error') || ...
+            contains(lower(out), 'self-intersection');
+ran_ok    = contains(out, 'Delaunizing') || contains(out, 'Opening');
+
+if ~found_int && ~ran_ok
+    error('cr_find_intersections:tetgenFailed', ...
+        ['TetGen did not produce interpretable output (exit status %d), ' ...
+         'so no conclusion can be drawn about intersections.\n' ...
+         'Command: "%s" -d "%s"\nOutput:\n%s'], ...
+        status, exe, poly, out);
+end
+
+R_raw = out;
 
 
 % PARSE AND MAP BACK
@@ -173,11 +200,11 @@ end
 
 if opts.verbose
     if isempty(I)
-        if contains(out, 'No self-intersection') || isempty(strtrim(out))
-            fprintf('\nNo self-intersections found.\n');
+        if found_int
+            fprintf(['\nTetGen reported a self-intersection but none could ' ...
+                     'be parsed. Raw output:\n%s\n'], out);
         else
-            fprintf(['\nNo collisions parsed, but TetGen said something ' ...
-                     'unexpected:\n%s\n'], out);
+            fprintf('\nTetGen inspected the file and found no self-intersections.\n');
         end
     else
         fprintf('\n%d collision(s) reported', n);
@@ -211,7 +238,10 @@ if opts.verbose
     fprintf('\n');
 end
 
-if ~isempty(I), I(1).n_total = n; end
+if ~isempty(I)
+    I(1).n_total = n;
+    I(1).raw     = R_raw;
+end
 
 end
 

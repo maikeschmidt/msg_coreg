@@ -147,6 +147,20 @@ for m = 1:numel(present)
     name = present{m};
     [V, F] = get_mesh(geom.(name));
 
+    % Non-finite coordinates. TetGen cannot parse these and exits WITHOUT
+    % printing anything, which is the empty 'Tetgen command failed:' message.
+    % Always fatal — no working geometry can contain one, so this is never
+    % demoted by the reference calibration.
+    n_bad = sum(any(~isfinite(V), 2));
+    if n_bad > 0
+        R.fatal{end+1}     = sprintf('%s: %d vertices are NaN or Inf', name, n_bad);
+        R.fatal_cat{end+1} = 'nonfinite';
+    end
+    if any(F(:) < 1) || any(F(:) > size(V,1)) || any(~isfinite(F(:)))
+        R.fatal{end+1}     = sprintf('%s: face indices out of range', name);
+        R.fatal_cat{end+1} = 'badindex';
+    end
+
     % Triangle angles. Slivers — very small minimum angle — are what makes
     % TetGen give up, and anisotropic scaling manufactures them.
     [ang_min, area] = tri_quality(V, F);
@@ -293,7 +307,13 @@ end
 
 if isfield(geom, 'sources_cent') && isfield(geom, 'mesh_wm')
     [Vw, Fw] = get_mesh(geom.mesh_wm);
-    in = points_inside(coords(geom.sources_cent), Vw, Fw);
+    SP = coords(geom.sources_cent);
+    if any(~isfinite(SP(:)))
+        R.fatal{end+1}     = sprintf('sources_cent: %d non-finite coordinates', ...
+            sum(any(~isfinite(SP), 2)));
+        R.fatal_cat{end+1} = 'nonfinite';
+    end
+    in = points_inside(SP, Vw, Fw);
     if any(~in)
         R = add_problem(R, opts, 'sources', ...
             sprintf('sources_cent: %d of %d sources outside mesh_wm', ...
@@ -313,6 +333,24 @@ if ~isempty(sens_field) && isfield(geom, opts.outer)
         end
     end
     if ~isempty(sp)
+        if any(~isfinite(sp(:)))
+            R.fatal{end+1}     = sprintf('%s: %d non-finite sensor coordinates', ...
+                sens_field, sum(any(~isfinite(sp), 2)));
+            R.fatal_cat{end+1} = 'nonfinite';
+        end
+        % Orientations are renormalised under the inverse-transpose when a
+        % geometry is warped, so a degenerate direction divides by zero and
+        % silently produces NaN. Checked because it is a known failure mode.
+        for oflds = {'coilori','chanori','ori'}
+            if isfield(geom.(sens_field), oflds{1})
+                O = geom.(sens_field).(oflds{1});
+                if isnumeric(O) && any(~isfinite(O(:)))
+                    R.fatal{end+1}     = sprintf('%s.%s: %d non-finite orientations', ...
+                        sens_field, oflds{1}, sum(any(~isfinite(O), 2)));
+                    R.fatal_cat{end+1} = 'nonfinite';
+                end
+            end
+        end
         [Vo, Fo] = get_mesh(geom.(opts.outer));
         in = points_inside(sp, Vo, Fo);
         if any(in)

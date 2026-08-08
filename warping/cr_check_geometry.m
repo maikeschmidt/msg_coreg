@@ -36,7 +36,7 @@ function R = cr_check_geometry(geom, opts)
 %                    geometry's own units (default [] = report only)
 %     .check_selfint run iso2mesh self-intersection test (default true)
 %     .check_nesting run point-in-surface nesting test (default true)
-%     .max_probe     vertices sampled per mesh for nesting (default 2000)
+%     .max_probe     vertices sampled per mesh for nesting (default 1000)
 %     .verbose       print a report (default true)
 %
 % OUTPUT:
@@ -52,6 +52,9 @@ function R = cr_check_geometry(geom, opts)
 % NOTES
 %   - Pure MATLAB apart from the optional self-intersection test, which uses
 %     iso2mesh meshcheckrepair if it is on the path. No toolboxes required.
+%   - The point-in-surface test is a vectorised solid-angle (winding number)
+%     computation, not a call to tt_is_inside — same maths, but tt_is_inside
+%     handles one point per call, which is far too slow here.
 %   - Distances are in whatever units the geometry uses; the detected scale
 %     is printed so a mm/m mix-up is obvious.
 %
@@ -85,7 +88,7 @@ if ~isfield(opts,'min_angle_deg'),  opts.min_angle_deg  = 1.0;   end
 if ~isfield(opts,'min_gap'),        opts.min_gap        = [];    end
 if ~isfield(opts,'check_selfint'),  opts.check_selfint  = true;  end
 if ~isfield(opts,'check_nesting'),  opts.check_nesting  = true;  end
-if ~isfield(opts,'max_probe'),      opts.max_probe      = 2000;  end
+if ~isfield(opts,'max_probe'),      opts.max_probe      = 1000;  end
 if ~isfield(opts,'verbose'),        opts.verbose        = true;  end
 if ~isfield(opts,'nested')
     opts.nested = setdiff(opts.meshes, {opts.outer}, 'stable');
@@ -222,7 +225,7 @@ end
 
 if isfield(geom, 'sources_cent') && isfield(geom, 'mesh_wm')
     [Vw, Fw] = get_mesh(geom.mesh_wm);
-    in = points_inside(geom.sources_cent, Vw, Fw);
+    in = points_inside(coords(geom.sources_cent), Vw, Fw);
     if any(~in)
         R.fatal{end+1} = sprintf('sources_cent: %d of %d sources outside mesh_wm', ...
             sum(~in), numel(in));
@@ -318,43 +321,72 @@ function P = subsample(V, n)
     P = V(round(linspace(1, size(V,1), n)), :);
 end
 
-function in = points_inside(P, V, F)
-% Point-in-closed-surface by ray casting along +X, counting crossings.
-% Uses tt_is_inside when it is on the path, since that is what the FEM
-% pipeline itself uses for seed placement — same answer, same edge cases.
-    if exist('tt_is_inside','file') == 2
-        in = false(size(P,1),1);
-        for i = 1:size(P,1)
-            in(i) = logical(tt_is_inside(P(i,:), V, F));
+function P = coords(X)
+% Pull an N x 3 coordinate array out of whatever the geometry stores.
+% sources_cent is a STRUCT with a .pos field, not a bare array, and passing
+% the struct straight through is what made this crash inside tt_is_inside.
+    if isnumeric(X)
+        P = double(X);
+    elseif isstruct(X)
+        for f = {'pos','vertices','coilpos','chanpos','p','v'}
+            if isfield(X, f{1}) && isnumeric(X.(f{1}))
+                P = double(X.(f{1}));
+                return;
+            end
         end
-        return;
+        error('cr_check_geometry:coords', ...
+            'Cannot find coordinates in struct with fields: %s', ...
+            strjoin(fieldnames(X)', ', '));
+    else
+        error('cr_check_geometry:coords', ...
+            'Expected numeric coordinates, got %s.', class(X));
     end
+    if size(P,2) ~= 3 && size(P,1) == 3, P = P'; end
+end
+
+function in = points_inside(P, V, F)
+% Point-in-closed-surface by solid angle (winding number): the surface
+% subtends 4*pi from an interior point and 0 from an exterior one, so the
+% test is |sum| > 2*pi. Robust to concavity, and it does not care about
+% face winding because the magnitude is taken.
+%
+% Vectorised over points AND faces in chunks. tt_is_inside does the same
+% maths but one point per call, which is far too slow to probe thousands of
+% vertices across several meshes — that loop is what had to be interrupted.
+    P = coords(P);
+    V = double(V);
+    F = double(F(:,1:3));
+
+    nF = size(F,1);
+    nP = size(P,1);
+    in = false(nP,1);
+    if nF == 0 || nP == 0, return; end
 
     A = V(F(:,1),:); B = V(F(:,2),:); C = V(F(:,3),:);
-    in = false(size(P,1),1);
-    for i = 1:size(P,1)
-        p = P(i,:);
-        % Triangles whose Y/Z box contains the ray
-        cand = min([A(:,2) B(:,2) C(:,2)],[],2) <= p(2) & ...
-               max([A(:,2) B(:,2) C(:,2)],[],2) >= p(2) & ...
-               min([A(:,3) B(:,3) C(:,3)],[],2) <= p(3) & ...
-               max([A(:,3) B(:,3) C(:,3)],[],2) >= p(3) & ...
-               max([A(:,1) B(:,1) C(:,1)],[],2) >= p(1);
-        if ~any(cand), continue; end
+    Ar = reshape(A, 1, nF, 3);
+    Br = reshape(B, 1, nF, 3);
+    Cr = reshape(C, 1, nF, 3);
 
-        a = A(cand,:); b = B(cand,:); c = C(cand,:);
-        e1 = b - a; e2 = c - a;
-        dir = [1 0 0];
-        h = [zeros(size(e2,1),1), e2(:,3), -e2(:,2)];    % cross(dir, e2)
-        det_ = sum(e1 .* h, 2);
-        ok = abs(det_) > 1e-14;
-        s  = p - a;
-        u  = sum(s .* h, 2) ./ det_;
-        q  = cross(s, e1, 2);
-        vv = q(:,1) ./ det_;                              % dot(dir, q)
-        t  = sum(e2 .* q, 2) ./ det_;
-        hit = ok & u >= 0 & u <= 1 & vv >= 0 & (u + vv) <= 1 & t > 1e-12;
-        in(i) = mod(sum(hit), 2) == 1;
+    % Keep each chunk's temporaries near 2e6 elements
+    chunk = max(1, floor(2e6 / nF));
+
+    for i0 = 1:chunk:nP
+        idx = i0:min(i0 + chunk - 1, nP);
+        p   = reshape(P(idx,:), numel(idx), 1, 3);
+
+        a = Ar - p;  b = Br - p;  c = Cr - p;
+        la = sqrt(sum(a.^2, 3));
+        lb = sqrt(sum(b.^2, 3));
+        lc = sqrt(sum(c.^2, 3));
+
+        num = sum(a .* cross(b, c, 3), 3);
+        den = la .* lb .* lc ...
+            + sum(a .* b, 3) .* lc ...
+            + sum(b .* c, 3) .* la ...
+            + sum(c .* a, 3) .* lb;
+
+        omega = 2 * atan2(num, den);
+        in(idx) = abs(sum(omega, 2)) > 2 * pi;
     end
 end
 

@@ -114,9 +114,18 @@ if ~isfield(opts,'nested')
     opts.nested = setdiff(opts.meshes, {opts.outer}, 'stable');
 end
 
-R.fatal    = {};
-R.warnings = {};
-R.quality  = {};
+R.fatal     = {};
+R.fatal_cat = {};
+R.warnings  = {};
+R.quality   = {};
+
+% SELF-CALIBRATION
+% opts.tolerated lists problem CATEGORIES that a geometry known to
+% tetrahedralise also exhibits. Anything in that list cannot be what stops
+% TetGen — it demonstrably does not — so it is reported as a warning rather
+% than a blocker. This is what stops an invented threshold from condemning
+% geometries that mesh perfectly well.
+if ~isfield(opts,'tolerated'), opts.tolerated = {}; end
 R.mesh     = struct('name',{},'n_vert',{},'n_face',{},'min_angle',{}, ...
                     'n_slivers',{},'n_degenerate',{},'closed',{}, ...
                     'n_open_edges',{},'euler',{},'volume',{},'selfint',{});
@@ -125,7 +134,8 @@ present = opts.meshes(cellfun(@(m) isfield(geom, m), opts.meshes));
 if isempty(present)
     R.ok = false;
     R.gaps = struct('a',{},'b',{},'min_dist',{});
-    R.fatal{end+1} = 'No mesh_* fields found in this geometry.';
+    R.fatal{end+1}     = 'No mesh_* fields found in this geometry.';
+    R.fatal_cat{end+1} = 'nomesh';
     if opts.verbose, fprintf('%s\n', R.fatal{end}); end
     return;
 end
@@ -144,8 +154,16 @@ for m = 1:numel(present)
     n_slivers    = sum(ang_min < opts.min_angle_deg);
     n_degenerate = sum(area < eps(max(area)) * 1e3);
 
-    % Edge manifoldness: every edge of a closed surface is in exactly 2 faces
-    E  = sort([F(:,[1 2]); F(:,[2 3]); F(:,[3 1])], 2);
+    % Edge manifoldness: every edge of a closed surface is in exactly 2 faces.
+    % Vertices are merged by position first — meshes imported from STL carry
+    % duplicated vertices, and on those the raw index-based edge test reports
+    % every edge as open even though the surface is perfectly closed.
+    tol  = 1e-6 * norm(max(V,[],1) - min(V,[],1));
+    if tol <= 0, tol = 1e-9; end
+    [~, ~, vmap] = unique(round(V / tol), 'rows');
+    Fm = vmap(F);
+    E  = sort([Fm(:,[1 2]); Fm(:,[2 3]); Fm(:,[3 1])], 2);
+    E  = E(E(:,1) ~= E(:,2), :);          % drop edges collapsed by the merge
     [~, ~, ic] = unique(E, 'rows');
     cnt = accumarray(ic, 1);
     n_open_edges = sum(cnt ~= 2);
@@ -182,7 +200,8 @@ for m = 1:numel(present)
     % only escalate when they are much worse than a reference geometry that
     % is known to mesh (opts.ref_mesh).
     if n_degenerate > 0
-        R.fatal{end+1} = sprintf('%s: %d zero-area faces', name, n_degenerate);
+        R = add_problem(R, opts, 'degenerate', ...
+            sprintf('%s: %d zero-area faces', name, n_degenerate));
     end
     if n_slivers > 0
         R.quality{end+1} = sprintf('%s: %d faces below %.2f deg (min %.4f)', ...
@@ -205,15 +224,17 @@ for m = 1:numel(present)
         end
     end
     if ~closed
-        R.fatal{end+1} = sprintf('%s: surface not closed, %d non-manifold edges', ...
-            name, n_open_edges);
+        R = add_problem(R, opts, 'open', ...
+            sprintf('%s: surface not closed, %d non-manifold edges', ...
+            name, n_open_edges));
     end
     if euler ~= 2 && closed
         R.warnings{end+1} = sprintf('%s: Euler characteristic %d (a sphere is 2) — genus %g', ...
             name, euler, (2 - euler)/2);
     end
     if isequal(selfint, true)
-        R.fatal{end+1} = sprintf('%s: surface self-intersects', name);
+        R = add_problem(R, opts, 'selfint', ...
+            sprintf('%s: surface self-intersects', name));
     end
     if volume <= 0
         R.warnings{end+1} = sprintf('%s: signed volume %.4g — face winding may be inverted', ...
@@ -237,8 +258,9 @@ for i = 1:numel(present)
         R.gaps(end+1) = struct('a', present{i}, 'b', present{j}, ...
             'min_dist', dmin); %#ok<AGROW>
         if ~isempty(opts.min_gap) && dmin < opts.min_gap
-            R.fatal{end+1} = sprintf('%s / %s: surfaces %.4g apart (limit %.4g)', ...
-                present{i}, present{j}, dmin, opts.min_gap);
+            R = add_problem(R, opts, 'gap', ...
+                sprintf('%s / %s: surfaces %.4g apart (limit %.4g)', ...
+                present{i}, present{j}, dmin, opts.min_gap));
         end
     end
 end
@@ -259,9 +281,9 @@ if opts.check_nesting && isfield(geom, opts.outer)
         in = points_inside(P, Vo, Fo);
         n_out = sum(~in);
         if n_out > 0
-            R.fatal{end+1} = sprintf(...
+            R = add_problem(R, opts, 'nesting', sprintf(...
                 '%s: %d of %d sampled vertices lie OUTSIDE %s', ...
-                nm, n_out, numel(in), opts.outer);
+                nm, n_out, numel(in), opts.outer));
         end
     end
 end
@@ -273,8 +295,9 @@ if isfield(geom, 'sources_cent') && isfield(geom, 'mesh_wm')
     [Vw, Fw] = get_mesh(geom.mesh_wm);
     in = points_inside(coords(geom.sources_cent), Vw, Fw);
     if any(~in)
-        R.fatal{end+1} = sprintf('sources_cent: %d of %d sources outside mesh_wm', ...
-            sum(~in), numel(in));
+        R = add_problem(R, opts, 'sources', ...
+            sprintf('sources_cent: %d of %d sources outside mesh_wm', ...
+            sum(~in), numel(in)));
     end
 end
 
@@ -293,9 +316,9 @@ if ~isempty(sens_field) && isfield(geom, opts.outer)
         [Vo, Fo] = get_mesh(geom.(opts.outer));
         in = points_inside(sp, Vo, Fo);
         if any(in)
-            R.fatal{end+1} = sprintf(...
+            R = add_problem(R, opts, 'sensors', sprintf(...
                 '%s: %d of %d sensors are INSIDE %s', ...
-                sens_field, sum(in), numel(in), opts.outer);
+                sens_field, sum(in), numel(in), opts.outer));
         end
     end
 end
@@ -365,6 +388,19 @@ end
 function P = subsample(V, n)
     if size(V,1) <= n, P = V; return; end
     P = V(round(linspace(1, size(V,1), n)), :);
+end
+
+function R = add_problem(R, opts, category, msg)
+% A problem is only FATAL if a geometry known to tetrahedralise does not
+% also have it. Otherwise it is demonstrably survivable, and saying
+% otherwise would condemn working geometries.
+    if any(strcmp(opts.tolerated, category))
+        R.warnings{end+1} = sprintf(...
+            '%s  [reference has this too — not what blocks TetGen]', msg);
+    else
+        R.fatal{end+1}     = msg;
+        R.fatal_cat{end+1} = category;
+    end
 end
 
 function P = coords(X)

@@ -62,10 +62,26 @@ if isfield(S,'reference') && ~isempty(S.reference)
     ref = S.reference;
     if ~isfile(ref), ref = fullfile(S.dir, ref); end
     fprintf('Reference (known to mesh): %s\n', ref);
-    ro = S.opts; ro.verbose = false; ro.ref_mesh = [];
+    ro = S.opts; ro.verbose = false; ro.ref_mesh = []; ro.tolerated = {};
     Rref = cr_check_geometry(ref, ro);
     S.opts.ref_mesh = Rref.mesh;
-    fprintf('  reference worst angle: %.4f deg\n\n', min([Rref.mesh.min_angle]));
+
+    % Anything the reference ALSO fails cannot be what stops TetGen — this
+    % geometry demonstrably meshes. Those categories are demoted to warnings
+    % for every file, which is what keeps an invented threshold from
+    % condemning geometries that work.
+    S.opts.tolerated = unique(Rref.fatal_cat);
+    if isempty(Rref.mesh)
+        fprintf('  WARNING: no meshes found in the reference.\n');
+    else
+        fprintf('  reference worst angle : %.4f deg\n', min([Rref.mesh.min_angle]));
+    end
+    if isempty(S.opts.tolerated)
+        fprintf('  reference is clean on every check.\n\n');
+    else
+        fprintf('  reference also fails  : %s\n', strjoin(S.opts.tolerated, ', '));
+        fprintf('  -> those are demoted to warnings everywhere.\n\n');
+    end
 end
 
 fprintf('=== Checking %d geometries ===\n\n', numel(d));
@@ -121,8 +137,21 @@ for k = 1:numel(d)
 end
 
 n_ok = sum([T.ok]);
-fprintf('\n%d of %d geometries pass (%d would fail TetGen).\n', ...
+fprintf('\n%d of %d geometries pass (%d flagged).\n', ...
     n_ok, numel(T), numel(T) - n_ok);
+
+if ~isfield(S,'reference') || isempty(S.reference)
+    fprintf(['\nNo reference given, so these verdicts rest on absolute\n' ...
+             'thresholds. Pass S.reference = a geometry you have already\n' ...
+             'tetrahedralised and re-run — it is the only calibration that\n' ...
+             'means anything.\n']);
+elseif n_ok == numel(T)
+    fprintf(['\nNothing here distinguishes these geometries from the one that\n' ...
+             'meshed. If the FEM still fails, the cause is not surface\n' ...
+             'quality — look at the compartment seed points in\n' ...
+             'run_fem_leadfields, which are sampled per run and can land in\n' ...
+             'the wrong region on a deformed geometry.\n']);
+end
 
 fid = fopen(S.csv, 'w');
 fprintf(fid, 'file,ok,n_fatal,n_warn,min_angle_deg,worst_mesh,first_problem\n');

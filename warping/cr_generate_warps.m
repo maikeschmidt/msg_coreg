@@ -5,13 +5,6 @@
 % with optional mild shear so the variants are not purely axis-aligned
 % rescalings.
 %
-% WHY THIS EXISTS
-%   Reviewer 1 asked for 3-5 participants; Reviewer 3 asked for the n = 1
-%   anatomy to be listed as a limitation. Only one participant was
-%   scanned. Warping the single anatomical model into N plausible body
-%   shapes gives a population of DISTINCT GEOMETRIES on which BEM and FEM
-%   can each be run and compared.
-%
 %   State clearly in the manuscript what this does and does not show.
 %     It DOES show: the BEM-FEM agreement is not an artefact of one
 %       particular set of vertebral proportions, and it quantifies how the

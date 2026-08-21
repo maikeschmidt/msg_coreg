@@ -5,16 +5,16 @@
 % with optional mild shear so the variants are not purely axis-aligned
 % rescalings.
 %
-%   State clearly in the manuscript what this does and does not show.
-%     It DOES show: the BEM-FEM agreement is not an artefact of one
-%       particular set of vertebral proportions, and it quantifies how the
-%       reported 35-72% LR amplitude effect varies with body shape.
+%   WHAT THE WARP SET DOES AND DOES NOT REPRESENT — be explicit about this
+%   when reporting results built on it.
+%     It DOES show: whether a result is an artefact of one particular set
+%       of body proportions, by rerunning it across a family of plausible
+%       shapes.
 %     It does NOT show: true inter-subject anatomical variability. The
 %       warps are affine, so vertebra count, spinal curvature, relative
-%       organ placement and all non-affine anatomical detail are preserved
-%       from the single scanned participant. These are synthetic
-%       geometries, not participants, and must never be described as n=30
-%       subjects.
+%       organ placement and all non-affine anatomical detail are inherited
+%       unchanged from the source anatomy. These are synthetic geometries,
+%       not participants, and should never be described as N subjects.
 %
 % VOLUME PRESERVATION
 %   By default each warp is volume-preserving (scale factors are rescaled

@@ -16,49 +16,29 @@ University College London**.
 
 ```
 msg_coreg/
-├── coreg_path.m
-├── cr_add_functions.m
-├── cr_check_registration.m
-├── cr_generate_sensor_array_v4.m
-├── cr_generate_spine_center.m
-├── cr_get_fids.m
-├── cr_load_meshes.m
-├── cr_register_brain.m
-├── cr_register_torso.m
+├── coreg_path.m                    — path function (locates repository root)
+├── cr_add_functions.m              — dependency setup (HBF, FieldTrip wrappers)
+├── cr_check_registration.m         — main entry point: register, plot, return meshes
+├── cr_load_meshes.m                — load the STL set and apply a transform
+├── cr_register_torso.m             — fit the torso mesh to a subject surface
+├── cr_register_brain.m             — fit the SPM brain/skull/scalp meshes
+├── cr_get_fids.m                   — canonical / anatomical fiducial definitions
+├── cr_generate_sensor_array_v4.m   — generate an OPM or electrode array
+├── cr_generate_spine_center.m      — spinal cord centreline source model
+├── determine_body_scan_units.mlx   — helper notebook: work out a scan's units
+│
+├── warping/                        — synthesise alternative body shapes
+│   ├── cr_generate_warps.m         — reproducible set of affine warps
+│   ├── cr_plot_warps.m             — INSPECT the warps before using them
+│   ├── cr_build_warp_geometries.m  — apply each warp, write geometry files
+│   ├── cr_find_intersections.m     — name the meshes that self-intersect
+│   └── cr_scan_intersections.m     — run that check over a whole folder
+│
 ├── example/
-│   ├── example_script_1.m
-│   └── example_script_2          — anatomical workflow (worked example)
-├── torso_tools/                  — BEM torso forward-modelling helpers (see
-│   │                               torso_tools/README.md); tt_* mesh, registration,
-│   │                               sensor, and BEM utilities
-│   └── ...
-├── meshes/
-│   ├── back_muscle_temp.stl
-│   ├── canonical_cervical_cont.stl
-│   ├── canonical_cervical_homo.stl
-│   ├── canonical_cervical_inhomo.stl
-│   ├── canonical_full_cont.stl
-│   ├── canonical_full_homo.stl
-│   ├── canonical_full_inhomo.stl
-│   ├── canonical_heart.stl
-│   ├── canonical_lungs.stl
-│   ├── canonical_torso.stl
-│   ├── cervical_spine.stl
-│   ├── heart.stl
-│   ├── mri_cervical_cont.stl
-│   ├── mri_cervical_homo.stl
-│   ├── mri_cervical_inhomo.stl
-│   ├── mri_cervical_spine.stl
-│   ├── mri_full_cont.stl
-│   ├── mri_full_homo.stl
-│   ├── mri_full_inhomo.stl
-│   ├── mri_full_spine.stl
-│   ├── mri_lungs.stl
-│   ├── mri_torso.stl
-│   ├── realistic_cervical_bone.stl
-│   ├── realistic_full_bone.stl
-│   ├── spine.stl
-│   └── vagus_nerve_temp.stl
+│   ├── example_script_1.m          — canonical workflow, existing sensor array
+│   └── example_script_2            — anatomical workflow, generated array
+│
+├── meshes/                         — bundled STL meshes (see meshes/README.md)
 └── README.md
 ```
 
@@ -200,8 +180,9 @@ To investigate **concurrent cortico–spinal interactions**, a brain model can
 be included using the SPM template brain. This requires selection of three 
 fiducials: left preauricular, right preauricular, and nasion.
 
-> To export the transformation matrix applied to the SPM brain template, 
-> uncomment **line 345** in `cr_check_registration.m`.
+> To export the transformation matrix applied to the SPM brain template,
+> uncomment the `output_meshes.brains_transform_mat` line near the end of
+> `cr_check_registration.m`.
 
 ---
 
@@ -221,68 +202,32 @@ For BEM forward modelling, export the following outputs to your pipeline:
 - Spinal cord source locations
 - The transformation matrix
 
-Compatible forward modelling pipeline:  
+Compatible forward modelling pipeline:
 https://github.com/maikeschmidt/msg_fwd
-
-> *[Insert forward modelling paper citation here]*
 
 ---
 
 ## Optional: Forward Model Sensitivity Analysis
 
-Both example scripts include optional sections for generating shifted geometry 
-files that can be used to assess how sensitive forward solutions are to 
-registration uncertainty. These sections are **self-contained and clearly 
-labelled** within each script — they can be run or skipped independently of 
+Both example scripts end with **optional, self-contained sections** that
+generate shifted geometry files, so you can measure how sensitive a forward
+solution is to registration uncertainty. Run or skip them independently of
 the main coregistration workflow.
 
-Two types of sensitivity analysis are supported, corresponding to two 
-different sources of registration error:
+| Section | Models | Produces |
+|---|---|---|
+| **Source position sensitivity** | uncertainty in spinal cord localisation | 19 geometry files: the original plus fixed shifts of ±2, ±4, ±6 mm applied independently along X, Y and Z. Meshes and sensor array identical throughout. |
+| **Sensor array sensitivity** | registration error in sensor placement | 25 geometry files: the original plus 24 random `[dx, dy, dz]` displacements of the whole array, in three bundles (~2 mm, ~5 mm, ~10 mm) with 8 realisations each. Meshes and source model identical throughout. |
 
-### Source position sensitivity
+For the sensor shifts, only `coilpos` and `chanpos` move; orientations
+(`coilori`, `chanori`) and the transfer matrix (`tra`) are left alone, so the
+triaxial orthogonal structure of the array is preserved. Shifts use `rng(42)`
+and the exact vectors are printed at runtime, so a run can be reproduced
+exactly on another machine.
 
-Evaluates uncertainty in spinal cord localisation by shifting the source 
-model by small fixed amounts independently along each anatomical axis 
-(±2, ±4, ±6 mm in X, Y, and Z). This produces 18 shifted geometry files 
-plus the original (19 total), each with an identical mesh and sensor array 
-but a translated source model.
-
-This is useful for quantifying how much the predicted sensor pattern 
-changes if the spinal cord centre line is misregistered by a few millimetres.
-
-**When to use:** when you want to assess the impact of anatomical 
-uncertainty on forward model accuracy, for example when using canonical 
-meshes where spinal cord positioning is approximate.
-
-### Sensor array sensitivity
-
-Evaluates uncertainty in sensor array registration by shifting the entire 
-sensor array by random 3D displacements [dx, dy, dz]. Shifts are grouped 
-into three bundles representing different registration error scales 
-(~2 mm, ~5 mm, ~10 mm), with 8 random realisations per bundle. This 
-produces 24 shifted geometry files plus the original (25 total), each with 
-an identical mesh and source model but a translated sensor array.
-
-Sensor orientations (`coilori`, `chanori`) and the transfer matrix (`tra`) 
-are **not modified** — only `coilpos` and `chanpos` are shifted, so the 
-triaxial orthogonal structure of the sensor array is fully preserved.
-
-Shifts are generated with `rng(42)` for reproducibility. The exact 
-[dx, dy, dz] vectors are printed at runtime and can be hardcoded in the 
-script for exact reproduction across machines.
-
-**When to use:** when you want to assess how sensitive forward solutions 
-are to errors in sensor array placement or body scan registration, for 
-example when the sensor-to-body transform has limited accuracy.
-
-### Running the sensitivity analyses
-
-Both sensitivity sections are at the end of each example script and can 
-be run after the main coregistration workflow completes. The geometry 
-`.mat` files they produce are passed directly to `run_bem_leadfields.m` 
-in `msg_fwd` for leadfield computation, and then analysed using the 
-sensitivity pipeline in `msg_fwd`. No additional configuration of 
-`msg_coreg` is required.
+Both sections require an experimental sensor array saved as
+`experimental_sensors` in the geometry struct, which the example scripts set
+up earlier.
 
 Full workflow:
 
@@ -294,13 +239,14 @@ Full workflow:
 % 4. In msg_pert: run pt_load_leadfields, pt_compute_rsq, then plot/table scripts
 ```
 
-The perturbation/sensitivity analysis pipeline lives in the **msg_pert**
-repository (`pt_*` scripts). msg_pert also has its own, more systematic
-shift generators (`pt_generate_source_shifts`, `pt_generate_sensor_shifts`,
-3 bundles × 8 random shifts) plus conductivity perturbation:  
+**For anything more than a quick check, use msg_pert instead.** It has more
+systematic generators of its own (`pt_generate_source_shifts`,
+`pt_generate_sensor_shifts` — 3 bundles x 8 random shifts each) plus
+conductivity perturbation, and it is where the analysis lives:
 https://github.com/maikeschmidt/msg_pert
 
 ---
+
 
 ## Example Scripts
 
@@ -311,50 +257,17 @@ experimental sensor space and import an existing experimental OPM sensor layout.
 Recommended when you already have an experimentally defined sensor layout and 
 want to run simulations in the same coordinate system as recorded data.
 
-**Optional sensitivity analysis sections** (at the end of the script):
-
-**Source position sensitivity** — generates 19 geometry files (1 original 
-+ 18 shifted) with source positions translated by ±2, ±4, and ±6 mm 
-independently along X, Y, and Z. The meshes and sensor array are identical 
-across all configurations.
-
-The 19 geometry files produced are:
-geometries_original.mat
-geometries_shift_x_pos2mm.mat
-geometries_shift_x_pos4mm.mat
-geometries_shift_x_pos6mm.mat
-geometries_shift_x_neg2mm.mat
-geometries_shift_x_neg4mm.mat
-geometries_shift_x_neg6mm.mat
-geometries_shift_y_pos2mm.mat
-geometries_shift_y_pos4mm.mat
-geometries_shift_y_pos6mm.mat
-geometries_shift_y_neg2mm.mat
-geometries_shift_y_neg4mm.mat
-geometries_shift_y_neg6mm.mat
-geometries_shift_z_pos2mm.mat
-geometries_shift_z_pos4mm.mat
-geometries_shift_z_pos6mm.mat
-geometries_shift_z_neg2mm.mat
-geometries_shift_z_neg4mm.mat
-geometries_shift_z_neg6mm.mat
-
-**Sensor array sensitivity** — generates 25 geometry files (1 original + 
-24 shifted) with the entire sensor array translated by random [dx, dy, dz] 
-displacements in three bundles by error scale. The meshes and source model 
-are identical across all configurations.
-
-> **Note:** Both sensitivity sections require an experimental sensor array 
-> saved as `experimental_sensors` in the geometry struct, which is set up 
-> earlier in this script.
+It also carries both optional sensitivity sections at the end — see
+[Optional: Forward Model Sensitivity Analysis](#optional-forward-model-sensitivity-analysis)
+above. Source-shift files are named `geometries_shift_<axis>_<sign><n>mm.mat`
+alongside `geometries_original.mat`.
 
 ### example_script_2 — Build anatomical meshes and generate a sensor array
 
 Demonstrates the full anatomical modelling pipeline using subject-specific 
-geometry, realistic MRI-segmented bone, and a scanner-cast optical surface 
-(user-supplied `surface.stl`). Reproduces the simulation setup used in the publication. 
-Recommended when accurate spinal cord positioning or realistic bone geometry 
-is required.
+geometry, realistic MRI-segmented bone, and a scanner-cast optical surface
+(user-supplied `surface.stl`). Recommended when accurate spinal cord
+positioning or realistic bone geometry is required.
 
 Also includes the same optional sensitivity analysis sections as 
 `example_script_1.m`, allowing sensitivity analyses to be run from either 
@@ -362,16 +275,45 @@ the canonical or anatomical modelling workflow.
 
 ---
 
+## Synthesising Alternative Body Shapes
+
+The `warping/` folder generates affine warps of the anatomical model —
+taller/thinner, shorter/wider, and everything in between — and writes one
+geometry file per warp. Use it to test whether a forward-modelling result
+depends on one particular set of body proportions.
+
+```matlab
+W = cr_generate_warps(struct('n_warps', 30));
+
+cr_plot_warps('geometries_original.mat');   % ALWAYS look at this first
+
+S = struct('geom_file', 'geometries_anatom_full_realistic.mat', ...
+           'warp_file', 'anatomical_warps.mat', ...
+           'outdir',    'path/to/warp/geometries');
+files = cr_build_warp_geometries(S);
+```
+
+Warps are affine, so vertebra count, spinal curvature and relative organ
+placement are inherited unchanged from the source anatomy. They bound
+robustness to body-shape variation; they are **not** a substitute for
+scanning more participants, and should never be described as N subjects.
+
+`cr_scan_intersections` checks a whole folder of geometries for the
+self-intersections that make TetGen fail, and names the meshes responsible —
+worth running before committing hours of FEM compute.
+
 ---
 
-## Citation
+## Companion Repositories
 
-If you use this toolbox in your work, please cite:
-
-> *[Add paper citation here]*
+| Repository | Role |
+|---|---|
+| [msg_fwd](https://github.com/maikeschmidt/msg_fwd) | Forward modelling — BEM and FEM lead fields from these geometries |
+| [msg_pert](https://github.com/maikeschmidt/msg_pert) | Perturbation analysis of those forward models |
+| [msg_analysis](https://github.com/maikeschmidt/msg_analysis) | Concurrent cortico-spinal OPM data analysis |
+| [msg_error](https://github.com/maikeschmidt/msg_error) | MRI-derived head/neck geometries and error analysis |
 
 ---
-
 
 ## Copyright
 

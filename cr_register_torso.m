@@ -126,30 +126,15 @@ end
 %
 % THESE ARE COORDINATES, NOT VERTEX INDICES — AND THAT IS DELIBERATE.
 %
-% This code previously used the hardcoded vertex indices 3104, 8807 and 858.
-% Those index the UNMERGED vertex list of canonical_torso.stl, which has
-% 3 vertices per face = 12,390 entries. MATLAB's built-in stlread returns a
-% triangulation with duplicate points MERGED — 2,067 vertices — so the
-% indices ran off the end and the function failed with
-%   "Index in position 1 exceeds array bounds. Index must not exceed 2067."
-% The original author must have used an stlread that did not merge points.
-%
-% The coordinates below were recovered from the unmerged list at exactly
-% those three indices, so they are the original intended landmarks, not a
-% re-pick. They are checked as anatomically consistent: the shoulders sit
-% on opposite sides in X at near-equal height, and the chin is near the
-% midline, above the shoulders, and at the anterior extreme.
+% Vertex indices are not stable across STL readers: some merge duplicate
+% points and some do not, and merging does not define an ordering. For
+% these same three landmarks MATLAB's stlread yields indices 574, 1544 and
+% 178, an unmerged reader yields 3104, 8807 and 858, and a sorted-unique
+% merge (e.g. numpy) yields 2031, 16 and 995.
 %
 % Storing coordinates and resolving them to the nearest vertex at run time
-% makes this robust to vertex merging, vertex reordering, and any change of
-% STL reader — none of which preserve indices, all of which preserve
-% geometry.
-%
-% DO NOT REPLACE THIS WITH INDICES FOR THE MERGED LIST. Merging does not
-% define an ordering, so the index depends on the reader: for these same
-% three points MATLAB's stlread yields 574, 1544 and 178, while a
-% sorted-unique merge (e.g. numpy) yields 2031, 16 and 995. Only the
-% coordinates are stable.
+% is robust to all of that: readers change indices, but never geometry.
+% DO NOT REPLACE THIS WITH VERTEX INDICES.
 
 torso_fid_ref = [ ...
      2.0898,   0.2269,  -0.4374;   % Left shoulder
@@ -170,7 +155,7 @@ end
 % shipped canonical_torso.stl, quoted to 4 decimal places against float32
 % STL storage, so the residual is ~5e-5 on a mesh of extent ~8 (relative
 % ~9e-6). Anything materially larger means the mesh has changed and the
-% landmarks are no longer the intended ones.
+% landmarks no longer sit where they should.
 mesh_scale = max(max(torso.vertices) - min(torso.vertices));
 if max(fid_err) > 1e-4 * mesh_scale
     warning('cr_register_torso:fiducialMismatch', ...

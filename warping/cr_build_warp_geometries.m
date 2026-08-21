@@ -12,13 +12,12 @@
 %   group statistics in msg_fwd/stats can pair sources across replicates
 %   directly.
 %
-%   The trade-off, which belongs in the manuscript: warping the array
-%   distorts inter-sensor spacing, so these are not physically realisable
-%   rigid arrays. That is acceptable here because the quantity of interest
-%   is the BEM-vs-FEM agreement WITHIN each warped geometry, and both
-%   solvers see exactly the same sensors. It would NOT be acceptable if
-%   absolute field amplitudes were being compared across warps as though
-%   they came from a real array.
+%   The trade-off, worth stating whenever these geometries are used:
+%   warping the array distorts inter-sensor spacing, so these are not
+%   physically realisable rigid arrays. That is fine for comparisons made
+%   WITHIN each warped geometry, where both models see exactly the same
+%   sensors. It is NOT fine for comparing absolute field amplitudes across
+%   warps as though they came from a real array.
 %
 %   Sensor ORIENTATIONS (coilori/chanori) are rotated by the warp's linear
 %   part using the inverse-transpose, which is the correct transformation
